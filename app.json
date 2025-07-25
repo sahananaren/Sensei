@@ -2,12 +2,12 @@
   "expo": {
     "name": "Sensei",
     "slug": "Sensei",
-    "version": "1.0.0",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -30,6 +30,10 @@
         "projectId": "ec9b6121-50a4-4517-9316-349e01ba1d97"
       }
     },
-    "owner": "sahananarenx"
+    "owner": "sahananarenx",
+    "android": {
+      "package": "com.sahananarenx.Sensei",
+      "permissions": []
+    }
   }
 }
