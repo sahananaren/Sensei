@@ -1,0 +1,558 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, Modal, Pressable, TouchableOpacity, Platform } from 'react-native';
+import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, G } from 'react-native-svg';
+import { WeeklyData } from '@/hooks/useProductivityData';
+
+interface ProductivitySession {
+  id: string;
+  habit_id: string;
+  vision_id: string;
+  duration_minutes: number;
+  completed_at: string;
+  habit: {
+    id: string;
+    name: string;
+  };
+  vision: {
+    id: string;
+    name: string;
+    color: string;
+  };
+}
+
+interface ProductivityChartProps {
+  weekData: WeeklyData[];
+  sessions: ProductivitySession[];
+  height?: number;
+}
+
+// Helper function to generate curved path for smooth lines
+function getCurvedPathD(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return '';
+  
+  let path = `M ${points[0].x} ${points[0].y}`;
+  
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    
+    if (i === 1) {
+      // First curve
+      const cp1x = prev.x + (curr.x - prev.x) * 0.3;
+      const cp1y = prev.y;
+      const cp2x = curr.x - (curr.x - prev.x) * 0.3;
+      const cp2y = curr.y;
+      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+    } else {
+      // Subsequent curves
+      const prevPrev = points[i - 2];
+      const cp1x = prev.x + (curr.x - prevPrev.x) * 0.15;
+      const cp1y = prev.y;
+      const cp2x = curr.x - (curr.x - prev.x) * 0.3;
+      const cp2y = curr.y;
+      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+    }
+  }
+  
+  return path;
+}
+
+interface TooltipContent {
+  date: string;
+  totalHours: string;
+  breakdown: Array<{
+    name: string;
+    hours: string;
+    color?: string;
+  }>;
+}
+
+interface ProductivityChartTooltipProps {
+  visible: boolean;
+  position: { x: number; y: number };
+  content: TooltipContent | null;
+  onClose: () => void;
+}
+
+function ProductivityChartTooltip({ visible, position, content, onClose }: ProductivityChartTooltipProps) {
+  if (!content) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Pressable style={styles.tooltipOverlay} onPress={onClose}>
+        <View 
+          style={[
+            styles.tooltipContainer,
+            {
+              left: Math.max(10, Math.min(position.x - 75, Dimensions.get('window').width)),
+              top: Math.max(10, position.y),
+            }
+          ]}
+        >
+          <Text style={styles.tooltipDate}>{content.date}</Text>
+          <Text style={styles.tooltipTotal}>{content.totalHours}</Text>
+          
+          <View style={styles.tooltipDivider} />
+          
+          {content.breakdown.map((item, index) => (
+            <View key={index} style={styles.tooltipBreakdownItem}>
+              {item.color && (
+                <View style={[styles.tooltipColorDot, { backgroundColor: item.color }]} />
+              )}
+              <Text style={styles.tooltipBreakdownName}>{item.name}</Text>
+              <Text style={styles.tooltipBreakdownHours}>{item.hours}</Text>
+            </View>
+          ))}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+export function ProductivityChart({ weekData, sessions, height = 400 }: ProductivityChartProps) {
+  const chartWidth = 300;
+  const chartHeight = height - 79; // Leave space for labels only
+  const leftPadding = 30; // Left padding for Y-axis labels
+  const rightPadding = 8; // Right padding as requested
+  
+  // Tooltip state
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipContent, setTooltipContent] = useState<TooltipContent | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  
+  // Calculate actual max minutes from data
+  const actualMaxMinutes = Math.max(...weekData.map(day => day.totalMinutes));
+  
+  // Dynamic Y-axis scale based on actual data
+  const getDisplayMaxMinutes = (actualMax: number) => {
+    if (actualMax <= 300) return 300; // 5 hours
+    if (actualMax <= 600) return 600; // 10 hours
+    if (actualMax <= 900) return 900; // 15 hours
+    if (actualMax <= 1200) return 1200; // 20 hours
+    return 1500; // 25 hours
+  };
+  
+  const maxMinutes = getDisplayMaxMinutes(actualMaxMinutes);
+  
+  // Convert maxMinutes to hours for Y-axis label calculation
+  const maxHours = Math.ceil(maxMinutes / 60);
+  
+  // Get unique visions across the week
+  const uniqueVisions = new Map<string, { name: string; color: string }>();
+  weekData.forEach(day => {
+    Object.entries(day.visionData).forEach(([visionId, data]) => {
+      if (!uniqueVisions.has(visionId)) {
+        uniqueVisions.set(visionId, { name: data.name, color: data.color });
+      }
+    });
+  });
+  
+  // Calculate points for each vision line
+  const visionLines = Array.from(uniqueVisions.entries()).map(([visionId, visionInfo], visionIndex) => {
+    const visionPoints = weekData.map((day, index) => {
+      const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
+      const visionMinutes = day.visionData[visionId]?.minutes || 0;
+      const y = chartHeight - leftPadding - ((visionMinutes / maxMinutes) * (chartHeight - leftPadding * 2));
+      return { x, y };
+    });
+    
+    // Create area path for gradient fill
+    const areaPathD = getCurvedPathD(visionPoints) + 
+      ` L ${visionPoints[visionPoints.length - 1].x} ${chartHeight - leftPadding}` +
+      ` L ${visionPoints[0].x} ${chartHeight - leftPadding} Z`;
+    
+    return {
+      id: visionId,
+      name: visionInfo.name,
+      color: visionInfo.color,
+      points: visionPoints,
+      pathD: getCurvedPathD(visionPoints),
+      areaPathD,
+    };
+  });
+  
+  // Y-axis labels (time) - 2 hour intervals up to 20 hours
+  const yLabels = [];
+  
+  const interval = maxHours <= 10 ? 1 : 2; // 1-hour intervals under 10 hours, 2-hour intervals above
+
+  // Generate interval labels
+  for (let hours = 0; hours <= maxHours; hours += interval) {
+    const minutes = hours * 60;
+    if (minutes <= maxMinutes) {
+      const y = chartHeight - leftPadding - ((minutes / maxMinutes) * (chartHeight - leftPadding * 2));
+      const label = hours === 0 ? '0' : `${hours}h`;
+      yLabels.push({ y, label, minutes });
+    }
+  }
+
+  // Calculate cumulative productivity line
+  const cumulativePoints = weekData.map((day, index) => {
+    const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
+    const y = chartHeight - leftPadding - ((day.totalMinutes / maxMinutes) * (chartHeight - leftPadding * 2));
+    return { x, y };
+  });
+  
+  const cumulativePathD = getCurvedPathD(cumulativePoints);
+  
+  const handlePointPress = (dayIndex: number, type: 'vision' | 'cumulative', visionId?: string, x?: number, y?: number) => {
+    const dayData = weekData[dayIndex];
+    const date = new Date(dayData.date).toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+    
+    let content: TooltipContent;
+    
+    if (type === 'cumulative') {
+      const totalMinutes = dayData.totalMinutes;
+      const totalHours = totalMinutes < 60 
+        ? `${totalMinutes} mins`
+        : `${(totalMinutes / 60).toFixed(1)} hrs`;
+      
+      const breakdown = Object.entries(dayData.visionData).map(([visionId, data]) => ({
+        name: data.name,
+        hours: data.minutes < 60 
+          ? `${data.minutes} mins`
+          : `${(data.minutes / 60).toFixed(1)} hrs`,
+        color: data.color,
+      }));
+      
+      content = {
+        date,
+        totalHours,
+        breakdown,
+      };
+    } else {
+      // Vision-specific
+      const visionData = dayData.visionData[visionId!];
+      const totalMinutes = visionData?.minutes || 0;
+      const totalHours = totalMinutes < 60 
+        ? `${totalMinutes} mins`
+        : `${(totalMinutes / 60).toFixed(1)} hrs`;
+      
+      // Get sessions for this day and vision
+      const daySessions = sessions.filter(session => {
+        const sessionDate = new Date(session.completed_at).toDateString();
+        const targetDate = new Date(dayData.date).toDateString();
+        return sessionDate === targetDate && session.vision_id === visionId;
+      });
+      
+      // Group by habit
+      const habitMinutes: { [habitId: string]: { name: string; minutes: number } } = {};
+      daySessions.forEach(session => {
+        if (!habitMinutes[session.habit_id]) {
+          habitMinutes[session.habit_id] = {
+            name: session.habit.name,
+            minutes: 0,
+          };
+        }
+        habitMinutes[session.habit_id].minutes += session.duration_minutes;
+      });
+      
+      const breakdown = Object.values(habitMinutes).map(habit => ({
+        name: habit.name,
+        hours: habit.minutes < 60 
+          ? `${habit.minutes} mins`
+          : `${(habit.minutes / 60).toFixed(1)} hrs`,
+      }));
+      
+      content = {
+        date,
+        totalHours,
+        breakdown,
+      };
+    }
+    
+    setTooltipContent(content);
+    setTooltipPosition({ x: x || 0, y: (y || 0) - 158 });
+    setShowTooltip(true);
+  };
+  
+  return (
+    <>
+      <View style={styles.container}>
+        <Svg width={chartWidth} height={height - 16} style={styles.chart}>
+          <Defs>
+            {visionLines.map((visionLine, index) => (
+              <LinearGradient key={visionLine.id} id={`visionGradient${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor={visionLine.color} stopOpacity="0.4" />
+                <Stop offset="100%" stopColor={visionLine.color} stopOpacity="0" />
+              </LinearGradient>
+            ))}
+          </Defs>
+          
+          {/* Grid lines */}
+          {yLabels.map((label, index) => (
+            <Line
+              key={index}
+              x1={leftPadding}
+              y1={label.y}
+              x2={chartWidth - rightPadding}
+              y2={label.y}
+              stroke="#1C1C1C"
+              strokeWidth="1"
+              strokeDasharray="2,2"
+            />
+          ))}
+          
+          {/* Y-axis labels */}
+          {yLabels.map((label, index) => (
+            <SvgText
+              key={index}
+              x={leftPadding - 12}
+              y={label.y + 4}
+              fontSize="10"
+              fill="#A7A7A7"
+              textAnchor="end"
+              fontFamily="Inter-Regular"
+            >
+              {label.label}
+            </SvgText>
+          ))}
+          
+          {/* Individual vision areas with gradients */}
+          {visionLines.map((visionLine, index) => (
+            <G key={visionLine.id}>
+              {/* Area with gradient */}
+              <Path
+                d={visionLine.areaPathD}
+                fill={`url(#visionGradient${index})`}
+              />
+              {/* Dotted line */}
+              <Path
+                d={visionLine.pathD}
+                fill="none"
+                stroke={visionLine.color}
+                strokeWidth="2"
+                strokeOpacity="0.5"
+                strokeDasharray="3,3"
+              />
+            </G>
+          ))}
+          
+          {/* Cumulative productivity line */}
+          <Path
+            d={cumulativePathD}
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeDasharray="5,5"
+          />
+          
+          {/* Visible dots for vision lines */}
+          {visionLines.map((visionLine) => 
+            visionLine.points.map((point, index) => (
+              <Circle
+                key={`${visionLine.id}-dot-${index}`}
+                cx={point.x}
+                cy={point.y}
+                r="3"
+                fill={visionLine.color}
+                stroke="#0A0A0A"
+                strokeWidth="1"
+              />
+            ))
+          )}
+          
+          {/* Visible dots for cumulative line */}
+          {cumulativePoints.map((point, index) => (
+            <Circle
+              key={`cumulative-dot-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r="3"
+              fill="white"
+              stroke="#0A0A0A"
+              strokeWidth="1"
+            />
+          ))}
+          
+          {/* X-axis labels */}
+          {weekData.map((day, index) => {
+            const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
+            return (
+            <SvgText
+              key={day.date}
+              x={x}
+              y={chartHeight + 25}
+              fontSize="12"
+              fill="#A7A7A7"
+              textAnchor="middle"
+              fontFamily="Inter-Regular"
+            >
+              {day.dayName}
+            </SvgText>
+            );
+          })}
+        </Svg>
+        
+        {/* Pressable overlays for vision data points */}
+        {visionLines.map((visionLine) => 
+          visionLine.points.map((point, index) => (
+            <Pressable
+              key={`${visionLine.id}-pressable-${index}`}
+              style={[
+                styles.dataPointOverlay,
+                {
+                  left: point.x - 22,
+                  top: point.y - 22,
+                }
+              ]}
+              onPress={() => handlePointPress(index, 'vision', visionLine.id, point.x, point.y)}
+            />
+          ))
+        )}
+        
+        {/* Pressable overlays for cumulative data points */}
+        {cumulativePoints.map((point, index) => (
+          <Pressable
+            key={`cumulative-pressable-${index}`}
+            style={[
+              styles.dataPointOverlay,
+              {
+                left: point.x - 22,
+                top: point.y - 22,
+              }
+            ]}
+            onPress={() => handlePointPress(index, 'cumulative', undefined, point.x, point.y)}
+          />
+        ))}
+        
+        {/* Legend */}
+        <View style={styles.legend}>
+          <View style={styles.legendItems}>
+            {/* All Visions (cumulative) */}
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: 'white' }]} />
+              <Text style={styles.legendText}>All Visions</Text>
+            </View>
+            
+            {/* Individual visions */}
+            {Array.from(uniqueVisions.entries()).map(([visionId, visionInfo]) => (
+              <View key={visionId} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: visionInfo.color }]} />
+                <Text style={styles.legendText}>{visionInfo.name}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+      
+      <ProductivityChartTooltip
+        visible={showTooltip}
+        position={tooltipPosition}
+        content={tooltipContent}
+        onClose={() => setShowTooltip(false)}
+      />
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    position: 'relative',
+    pointerEvents: 'box-none',
+  },
+  chart: {
+    backgroundColor: 'transparent',
+  },
+  dataPointOverlay: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    backgroundColor: 'transparent',
+    pointerEvents: 'auto',
+  },
+  legend: {
+    marginTop: 0,
+  },
+  legendItems: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+  },
+  tooltipOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  tooltipContainer: {
+    position: 'absolute',
+    backgroundColor: '#2A2A2A',
+    borderRadius: 12,
+    padding: 16,
+    minWidth: 150,
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  tooltipDate: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    marginBottom: 4,
+  },
+  tooltipTotal: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    marginBottom: 12,
+  },
+  tooltipDivider: {
+    height: 1,
+    backgroundColor: '#444444',
+    marginBottom: 12,
+  },
+  tooltipBreakdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tooltipColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  tooltipBreakdownName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+  },
+  tooltipBreakdownHours: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+  },
+});

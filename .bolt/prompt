@@ -1,0 +1,186 @@
+UI Style Guide
+
+🔧 STYLE GUIDE
+
+🎨 Color Palette
+Element
+Color Code
+Notes
+Background
+#0A0A0A
+Primary background throughout the app
+Card Background
+#111111
+Use for containers, sections, buttons
+Font Primary
+#E6E6E6
+Headlines, key labels
+Font Secondary
+#A7A7A7
+Descriptions, timestamps, subtext
+Vision Accent Colors
+See below
+Use as highlights, progress indicators, headers for each vision:
+– Vision 1
+#329BA4
+
+
+– Vision 2
+#5E85E7
+
+
+– Vision 3
+#C04B76
+
+
+– Vision 4
+#E7975E
+
+
+
+
+🔤 Typography
+Font Family: Inter (system-compatible on mobile, highly readable)
+Style
+Size (px)
+Weight
+Use case
+Heading XL
+24
+700
+Section headers, large vision titles
+Heading L
+20
+600
+Card titles, page names
+Subheading
+16
+600
+Form labels, navigation text
+Body Normal
+14
+400
+Most paragraph and input text
+Body Small
+12
+400
+Notes, helper text, timestamps
+
+Line height should be ~1.4× font size for comfortable reading.
+
+📏 Spacing System
+Unit base: 4px
+Spacing Label
+Value (px)
+Use case
+XS
+4px
+Tight grouping (icons + text)
+S
+8px
+Button padding, small gaps
+M
+16px
+Section margin, between cards
+L
+24px
+Page padding
+XL
+32px
+Top-level section spacing
+
+Gutters between columns: 16px
+ Horizontal page padding: 20px
+ Card padding: 16px inside cards
+
+🔘 Buttons
+Type
+Padding (px)
+Border Radius
+Font
+Background
+Font Color
+Primary
+12V / 16H
+8px
+600
+Accent color (vision-specific)
+#FFFFFF
+Secondary
+12V / 16H
+8px
+600
+#1C1C1C
+#FFFFFF
+Ghost / Tertiary
+12V / 16H
+8px
+600
+Transparent
+#A7A7A7
+
+Hover / pressed states should include a subtle increase in opacity or background brightness for feedback.
+
+🧾 Inputs & Fields
+Field Type
+Background
+Border
+Font
+Padding
+Notes
+Input Field
+#111111
+#1C1C1C
+Inter 14px
+12px vertical / 16px horizontal
+Rounded corners, white text
+Placeholder
+
+
+
+
+#666666
+
+
+Low opacity text
+Error State
+border: #C04B76
+-
+-
+-
+Only when validation fails
+
+
+🟪 Card Components
+Use #111111 background
+
+
+Rounded corners: 12px
+
+
+Padding: 16px internal
+
+
+Apply shadow only subtly (optional): dark-mode friendly shadows like shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8
+
+
+
+🌗 Dark Mode Considerations
+All components designed natively for dark mode
+
+
+Avoid pure white contrast blocks; keep everything slightly muted
+
+
+Use gradients of the accent color subtly in progress bars, active tab indicator, etc.
+
+
+
+🧭 Iconography
+Monoline icons (outline style)
+
+
+Prefer Lucide, Feather, or Phosphor for lightweight, modern icons
+
+
+All icons should inherit the current text color unless overridden
