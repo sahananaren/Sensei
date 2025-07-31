@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,15 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { User, Mail, Lock, Crown, LogOut, Trash2, Pencil, Check, X, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { useSubscription } from '@/hooks/useSubscription';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface EditableFieldProps {
   label: string;
@@ -261,6 +266,7 @@ export default function ProfileTab() {
   const { user, signOut } = useAuth();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const { subscription, showUpgrade } = useSubscription();
   
   // Mock plan type - in real app this would come from user data
   const planType: 'free' | 'trial' | 'pro' = 'free';
@@ -353,15 +359,21 @@ export default function ProfileTab() {
       
       if (deleteError) {
         console.error('Error deleting user data:', deleteError);
+        // Continue anyway - the user can contact support to delete their auth account
       }
       
-      // Delete the auth user (this will cascade delete due to foreign keys)
-      const { error: authError } = await supabase.auth.admin.deleteUser(user?.id || '');
-      
-      if (authError) throw authError;
+      // Note: We can't delete the auth user with anon key
+      // The user will need to contact support or delete their account manually
+      // For now, we'll just sign them out
       
       // Sign out
       await signOut();
+      
+      Alert.alert(
+        'Account Deleted',
+        'Your data has been deleted. Please contact support to completely remove your account.',
+        [{ text: 'OK' }]
+      );
       
     } catch (error) {
       console.error('Error deleting account:', error);
@@ -431,11 +443,25 @@ export default function ProfileTab() {
         {/* Plan Status */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Plan Status</Text>
-          <PlanCard
-            planType={planType}
-            onUpgrade={handleUpgrade}
-            onManage={handleManagePlan}
-          />
+          <View style={styles.subscriptionCard}>
+            <View style={styles.subscriptionInfo}>
+              <Text style={styles.planName}>
+                {subscription.isPro ? 'Sensei Pro' : 'Free Plan'}
+              </Text>
+              <Text style={styles.planDetails}>
+                {subscription.visionCount}/{subscription.maxVisions} visions
+              </Text>
+            </View>
+            {subscription.isPro ? (
+              <TouchableOpacity style={styles.cancelButton} onPress={() => Alert.alert('Coming Soon', 'Subscription cancellation will be available soon')}>
+                <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.upgradeButton} onPress={showUpgrade}>
+                <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Actions */}
@@ -787,5 +813,55 @@ const styles = StyleSheet.create({
     color: '#A7A7A7',
     fontFamily: 'Inter',
     marginTop: 16,
+  },
+  subscriptionCard: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  planName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    fontFamily: 'Inter-SemiBold',
+  },
+  planDetails: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter-Regular',
+  },
+  upgradeButton: {
+    backgroundColor: '#329BA4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  upgradeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF6B6B',
+    fontFamily: 'Inter-SemiBold',
   },
 });

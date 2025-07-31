@@ -335,7 +335,7 @@ function VisionFilterDropdown({ visions, selectedVisionId, onSelectVision }: Vis
 
 interface WallOfFameProps {
   sessions: Array<{
-    major_win: string | null;
+    major_win?: string | null;
     completed_at: string;
     vision: { id: string; name: string; color: string };
   }>;

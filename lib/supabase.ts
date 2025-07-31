@@ -1,11 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 
-// Get environment variables with proper fallback handling
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// Get environment variables with fallback to app.config.js
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || Constants.expoConfig?.extra?.supabaseUrl;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || Constants.expoConfig?.extra?.supabaseAnonKey;
+
+// Enhanced debugging
+console.log('🔧 Supabase Config Debug:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  urlLength: supabaseUrl?.length || 0,
+  keyLength: supabaseAnonKey?.length || 0,
+  urlStart: supabaseUrl?.substring(0, 10) + '...',
+  keyStart: supabaseAnonKey?.substring(0, 10) + '...',
+  fromEnv: {
+    url: !!process.env.EXPO_PUBLIC_SUPABASE_URL,
+    key: !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  },
+  fromConstants: {
+    url: !!Constants.expoConfig?.extra?.supabaseUrl,
+    key: !!Constants.expoConfig?.extra?.supabaseAnonKey,
+  }
+});
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase configuration missing or empty:', {
+  console.error('❌ Supabase configuration missing or empty:', {
     url: supabaseUrl ? 'present' : 'missing',
     key: supabaseAnonKey ? 'present' : 'missing',
     EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
@@ -16,10 +35,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-console.log('Supabase configuration loaded:', {
-  url: supabaseUrl?.substring(0, 20) + '...',
-  hasKey: !!supabaseAnonKey
-});
+console.log('✅ Supabase configuration loaded successfully');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

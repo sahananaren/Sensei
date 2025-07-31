@@ -995,12 +995,12 @@ const styles = StyleSheet.create({
   sessionDetails: {
     minHeight: 200,
   },
-  emptyState: {
+  emptyStateSmall: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
   },
-  emptyStateText: {
+  emptyStateTextSmall: {
     fontSize: 16,
     fontWeight: '400',
     color: '#A7A7A7',

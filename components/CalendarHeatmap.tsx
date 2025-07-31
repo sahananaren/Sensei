@@ -18,13 +18,14 @@ interface CalendarHeatmapProps {
 
 interface FilterDropdownProps {
   habits: Array<{ id: string; name: string }>;
-  selectedHabitId: string | null;
+  selectedHabitId: string | null | undefined; // Allow undefined to match parent interface
   onSelectHabit: (habitId: string | null) => void;
 }
 
 function FilterDropdown({ habits, selectedHabitId, onSelectHabit }: FilterDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // Handle the case where selectedHabitId might be undefined
   const selectedHabit = habits.find(h => h.id === selectedHabitId);
   const displayText = selectedHabit ? selectedHabit.name : 'All Habits';
 
@@ -206,7 +207,21 @@ export default function CalendarHeatmap({
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    
+    // Fix: Use UTC to avoid locale-specific behavior
+    // This ensures Sunday is always 0, Monday is 1, etc.
+    const startingDayOfWeek = new Date(Date.UTC(year, month, 1)).getUTCDay();
+
+    // Debug logging to verify alignment
+    console.log('Calendar Alignment Debug:', {
+      year,
+      month,
+      firstDay: firstDay.toDateString(),
+      startingDayOfWeek,
+      utcStartingDayOfWeek: new Date(Date.UTC(year, month, 1)).getUTCDay(),
+      weekDays: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+      expectedFirstDay: ['S', 'M', 'T', 'W', 'T', 'F', 'S'][startingDayOfWeek]
+    });
 
     // Filter sessions for current month
     const monthSessions = sessions.filter(session => {
@@ -288,7 +303,7 @@ export default function CalendarHeatmap({
         
         <FilterDropdown
           habits={habits}
-          selectedHabitId={selectedHabitId}
+          selectedHabitId={selectedHabitId || null} // Provide default value
           onSelectHabit={onSelectHabit}
         />
       </View>
@@ -310,10 +325,11 @@ export default function CalendarHeatmap({
                   ? getIntensityColor(sessionsByDay[day] || 0)
                   : 'transparent'
               },
-              day && selectedDate && new Date(Date.UTC(year, month, day)).toISOString().split('T')[0] === selectedDate && {
+              // Fix: Add proper type checking for the conditional style
+              day && selectedDate && new Date(Date.UTC(year, month, day)).toISOString().split('T')[0] === selectedDate ? {
                 borderWidth: 2,
                 borderColor: visionColor,
-              }
+              } : {}
             ]}
             onPress={() => {
               if (day && onDayPress) {
@@ -408,7 +424,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#A7A7A7',
     fontFamily: 'Inter',
-    width: itemWidth,
+    width: `${100 / 7}%`, // Each day header takes exactly 1/7th of the width
   },
   calendar: {
     flexDirection: 'row',
@@ -416,7 +432,7 @@ const styles = StyleSheet.create({
     gap: gapSize,
   },
   calendarDay: {
-    width: itemWidth,
+    width: `${100 / 7}%`, // Each day takes exactly 1/7th of the width
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',

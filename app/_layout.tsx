@@ -7,14 +7,19 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useAuth } from '@/hooks/useAuth';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { useNotifications } from '@/hooks/useNotifications';
+import { SubscriptionProvider, useSubscription } from '@/hooks/useSubscription';
+import UpgradeScreen from './upgrade';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayoutContent() {
   useFrameworkReady();
   const { user, loading } = useAuth();
   const pathname = usePathname();
+  const { checkAndScheduleNotification } = useNotifications();
+  const { isUpgradeVisible, hideUpgrade, handleUpgrade } = useSubscription();
   
   // Load Inter font
   const [fontsLoaded, fontError] = useFonts({
@@ -60,6 +65,11 @@ export default function RootLayout() {
     }
   }, [user, loading, pathname]);
 
+  // Check and schedule notifications when app opens
+  useEffect(() => {
+    checkAndScheduleNotification();
+  }, []);
+
   // Don't render anything until fonts are loaded
   if (!fontsLoaded && !fontError) {
     return null;
@@ -83,10 +93,27 @@ export default function RootLayout() {
         <Stack.Screen name="create-vision" options={{ headerShown: false }} />
         <Stack.Screen name="create-habit" options={{ headerShown: false }} />
         <Stack.Screen name="focus-session/[habitId]" options={{ headerShown: false }} />
+        <Stack.Screen name="upgrade" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+      
+      {/* Upgrade Modal */}
+      <UpgradeScreen
+        visible={isUpgradeVisible}
+        onClose={hideUpgrade}
+        onSelectPlan={handleUpgrade}
+      />
+      
       <StatusBar style="light" />
     </GestureHandlerRootView>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SubscriptionProvider>
+      <RootLayoutContent />
+    </SubscriptionProvider>
   );
 }
 

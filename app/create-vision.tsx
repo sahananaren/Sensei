@@ -11,11 +11,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { X, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { testFunction } from '@/hooks/test-import';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface ProgressDotsProps {
   currentStep: number;
@@ -281,9 +284,86 @@ export default function CreateVisionScreen() {
     }
   };
 
-  const handleCongratsClose = () => {
-    setShowCongratsModal(false);
-    router.back();
+  const handleCreateVision = async () => {
+    if (!visionName.trim()) {
+      Alert.alert('Error', 'Please enter a vision name');
+      return;
+    }
+
+    // Check if user needs to upgrade
+    if (checkUpgradeRequired()) {
+      showUpgrade();
+      return;
+    }
+
+    setIsCreating(true);
+    
+    try {
+      // Get current vision count for color assignment
+      const { data: existingVisions } = await supabase
+        .from('visions')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('status', 'active');
+
+      const visionCount = existingVisions?.length || 0;
+      const colors = ['#329BA4', '#5E85E7', '#C04B76', '#E7975E'];
+      const visionColor = colors[visionCount % colors.length];
+
+      // Create vision
+      const { data: visionData, error: visionError } = await supabase
+        .from('visions')
+        .insert({
+          user_id: user?.id,
+          name: visionName.trim(),
+          description: visionDescription.trim(),
+          color: visionColor,
+        })
+        .select()
+        .single();
+
+      if (visionError) throw visionError;
+
+      // Create milestones
+      const validMilestones = milestones.filter(m => m.trim() !== '');
+      if (validMilestones.length > 0) {
+        const milestoneInserts = validMilestones.map(name => ({
+          vision_id: visionData.id,
+          name: name.trim(),
+        }));
+
+        const { error: milestonesError } = await supabase
+          .from('milestones')
+          .insert(milestoneInserts);
+
+        if (milestonesError) throw milestonesError;
+      }
+
+      // Create habits
+      const validHabits = habits.filter(h => h.trim() !== '');
+      if (validHabits.length > 0) {
+        const habitInserts = validHabits.map(name => ({
+          user_id: user?.id,
+          vision_id: visionData.id,
+          name: name.trim(),
+        }));
+
+        const { error: habitsError } = await supabase
+          .from('habits')
+          .insert(habitInserts);
+
+        if (habitsError) throw habitsError;
+      }
+
+      // Show success modal
+      setShowCongratsModal(true);
+      incrementVisionCount(); // Increment vision count after successful creation
+    } catch (error) {
+      console.error('Error creating vision:', error);
+      Alert.alert('Error', 'Failed to create vision. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const canProceedStep1 = visionName.trim() !== '' && visionDescription.trim() !== '';
@@ -409,6 +489,8 @@ export default function CreateVisionScreen() {
     }
   };
 
+  const { subscription, showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -482,7 +564,7 @@ export default function CreateVisionScreen() {
       <CongratsModal
         visible={showCongratsModal}
         visionName={visionName}
-        onClose={handleCongratsClose}
+        onClose={() => setShowCongratsModal(false)}
       />
     </KeyboardAvoidingView>
   );

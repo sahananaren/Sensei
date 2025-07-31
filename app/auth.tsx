@@ -13,11 +13,12 @@ import {
 import { router } from 'expo-router';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
+  const { signInWithGoogle, loading: googleLoading } = useGoogleAuth();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,7 +32,7 @@ export default function AuthScreen() {
   };
 
   const handleAuth = async () => {
-    if (!email.trim() || !password.trim() || (isSignUp && !fullName.trim())) {
+    if (!email.trim() || !password.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -56,7 +57,7 @@ export default function AuthScreen() {
     try {
       let result;
       if (isSignUp) {
-        result = await signUp(email.trim(), password, fullName.trim());
+        result = await signUp(email.trim(), password);
       } else {
         result = await signIn(email.trim(), password);
       }
@@ -75,14 +76,28 @@ export default function AuthScreen() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        Alert.alert('Error', error instanceof Error ? error.message : 'Google sign-in failed');
+      } else {
+        // Navigation will be handled by the auth state change
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred during Google sign-in');
+      console.error('Google auth error:', error);
+    }
+  };
+
   const toggleAuthMode = () => {
     setIsSignUp(!isSignUp);
-    setFullName('');
     setConfirmPassword('');
   };
 
   const isFormValid = () => {
-    const basicValid = email.trim() !== '' && password.trim() !== '' && (!isSignUp || fullName.trim() !== '');
+    const basicValid = email.trim() !== '' && password.trim() !== '';
     if (isSignUp) {
       return basicValid && confirmPassword.trim() !== '' && password === confirmPassword;
     }
@@ -111,21 +126,6 @@ export default function AuthScreen() {
         </View>
 
         <View style={styles.form}>
-          {isSignUp && (
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Full Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Enter your full name"
-                placeholderTextColor="#666666"
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
-            </View>
-          )}
-
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabel}>Email</Text>
             <TextInput
@@ -215,10 +215,13 @@ export default function AuthScreen() {
 
           <TouchableOpacity
             style={styles.googleButton}
-            onPress={() => Alert.alert('Coming Soon', 'Google sign-in will be available soon')}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading}
             activeOpacity={0.8}
           >
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            <Text style={styles.googleButtonText}>
+              {googleLoading ? 'Signing in...' : 'Continue with Google'}
+            </Text>
           </TouchableOpacity>
         </View>
 

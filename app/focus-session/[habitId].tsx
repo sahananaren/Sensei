@@ -205,7 +205,7 @@ export default function FocusSessionScreen() {
 
   // Timer effect
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     
     if (currentStep === 2) {
       interval = setInterval(() => {
@@ -504,7 +504,7 @@ Noted down places that need changing for draft 2"
                   milestone={milestone}
                   checked={selectedMilestones.includes(milestone.id)}
                   onToggle={() => toggleMilestone(milestone.id)}
-                  vision={vision}
+                  vision={vision!}
                 />
               ))}
             </View>

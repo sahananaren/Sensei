@@ -84,13 +84,13 @@ function ProductivityChartTooltip({ visible, position, content, onClose }: Produ
           style={[
             styles.tooltipContainer,
             {
-              left: Math.max(10, Math.min(position.x - 75, Dimensions.get('window').width)),
-              top: Math.max(10, position.y),
+              left: Math.max(10, Math.min(position.x - 100, Dimensions.get('window').width - 220)),
+              top: Math.max(10, position.y - 2), // Position 2px above the node
             }
           ]}
         >
-          <Text style={styles.tooltipDate}>{content.date}</Text>
-          <Text style={styles.tooltipTotal}>{content.totalHours}</Text>
+          <Text style={styles.tooltipDate} numberOfLines={1}>{content.date}</Text>
+          <Text style={styles.tooltipTotal} numberOfLines={1}>{content.totalHours}</Text>
           
           <View style={styles.tooltipDivider} />
           
@@ -99,8 +99,8 @@ function ProductivityChartTooltip({ visible, position, content, onClose }: Produ
               {item.color && (
                 <View style={[styles.tooltipColorDot, { backgroundColor: item.color }]} />
               )}
-              <Text style={styles.tooltipBreakdownName}>{item.name}</Text>
-              <Text style={styles.tooltipBreakdownHours}>{item.hours}</Text>
+              <Text style={styles.tooltipBreakdownName} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.tooltipBreakdownHours} numberOfLines={1}>{item.hours}</Text>
             </View>
           ))}
         </View>
@@ -196,6 +196,9 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
   const cumulativePathD = getCurvedPathD(cumulativePoints);
   
   const handlePointPress = (dayIndex: number, type: 'vision' | 'cumulative', visionId?: string, x?: number, y?: number) => {
+    // Only show tooltip for cumulative graphs
+    if (type !== 'cumulative') return;
+    
     const dayData = weekData[dayIndex];
     const date = new Date(dayData.date).toLocaleDateString('en-US', { 
       weekday: 'short', 
@@ -203,70 +206,27 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
       day: 'numeric' 
     });
     
-    let content: TooltipContent;
+    const totalMinutes = dayData.totalMinutes;
+    const totalHours = totalMinutes < 60 
+      ? `${totalMinutes} mins`
+      : `${(totalMinutes / 60).toFixed(1)} hrs`;
     
-    if (type === 'cumulative') {
-      const totalMinutes = dayData.totalMinutes;
-      const totalHours = totalMinutes < 60 
-        ? `${totalMinutes} mins`
-        : `${(totalMinutes / 60).toFixed(1)} hrs`;
-      
-      const breakdown = Object.entries(dayData.visionData).map(([visionId, data]) => ({
-        name: data.name,
-        hours: data.minutes < 60 
-          ? `${data.minutes} mins`
-          : `${(data.minutes / 60).toFixed(1)} hrs`,
-        color: data.color,
-      }));
-      
-      content = {
-        date,
-        totalHours,
-        breakdown,
-      };
-    } else {
-      // Vision-specific
-      const visionData = dayData.visionData[visionId!];
-      const totalMinutes = visionData?.minutes || 0;
-      const totalHours = totalMinutes < 60 
-        ? `${totalMinutes} mins`
-        : `${(totalMinutes / 60).toFixed(1)} hrs`;
-      
-      // Get sessions for this day and vision
-      const daySessions = sessions.filter(session => {
-        const sessionDate = new Date(session.completed_at).toDateString();
-        const targetDate = new Date(dayData.date).toDateString();
-        return sessionDate === targetDate && session.vision_id === visionId;
-      });
-      
-      // Group by habit
-      const habitMinutes: { [habitId: string]: { name: string; minutes: number } } = {};
-      daySessions.forEach(session => {
-        if (!habitMinutes[session.habit_id]) {
-          habitMinutes[session.habit_id] = {
-            name: session.habit.name,
-            minutes: 0,
-          };
-        }
-        habitMinutes[session.habit_id].minutes += session.duration_minutes;
-      });
-      
-      const breakdown = Object.values(habitMinutes).map(habit => ({
-        name: habit.name,
-        hours: habit.minutes < 60 
-          ? `${habit.minutes} mins`
-          : `${(habit.minutes / 60).toFixed(1)} hrs`,
-      }));
-      
-      content = {
-        date,
-        totalHours,
-        breakdown,
-      };
-    }
+    const breakdown = Object.entries(dayData.visionData).map(([visionId, data]) => ({
+      name: data.name,
+      hours: data.minutes < 60 
+        ? `${data.minutes} mins`
+        : `${(data.minutes / 60).toFixed(1)} hrs`,
+      color: data.color,
+    }));
+    
+    const content: TooltipContent = {
+      date,
+      totalHours,
+      breakdown,
+    };
     
     setTooltipContent(content);
-    setTooltipPosition({ x: x || 0, y: (y || 0) - 158 });
+    setTooltipPosition({ x: x || 0, y: y || 0 });
     setShowTooltip(true);
   };
   
@@ -337,18 +297,18 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
             d={cumulativePathD}
             fill="none"
             stroke="white"
-            strokeWidth="2"
+            strokeWidth="3"
             strokeDasharray="5,5"
           />
           
-          {/* Visible dots for vision lines */}
+          {/* Visible dots for vision lines - smaller and non-clickable */}
           {visionLines.map((visionLine) => 
             visionLine.points.map((point, index) => (
               <Circle
                 key={`${visionLine.id}-dot-${index}`}
                 cx={point.x}
                 cy={point.y}
-                r="3"
+                r="2"
                 fill={visionLine.color}
                 stroke="#0A0A0A"
                 strokeWidth="1"
@@ -356,16 +316,16 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
             ))
           )}
           
-          {/* Visible dots for cumulative line */}
+          {/* Visible dots for cumulative line - bigger and clickable */}
           {cumulativePoints.map((point, index) => (
             <Circle
               key={`cumulative-dot-${index}`}
               cx={point.x}
               cy={point.y}
-              r="3"
+              r="6"
               fill="white"
               stroke="#0A0A0A"
-              strokeWidth="1"
+              strokeWidth="2"
             />
           ))}
           
@@ -388,32 +348,15 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
           })}
         </Svg>
         
-        {/* Pressable overlays for vision data points */}
-        {visionLines.map((visionLine) => 
-          visionLine.points.map((point, index) => (
-            <Pressable
-              key={`${visionLine.id}-pressable-${index}`}
-              style={[
-                styles.dataPointOverlay,
-                {
-                  left: point.x - 22,
-                  top: point.y - 22,
-                }
-              ]}
-              onPress={() => handlePointPress(index, 'vision', visionLine.id, point.x, point.y)}
-            />
-          ))
-        )}
-        
-        {/* Pressable overlays for cumulative data points */}
+        {/* Pressable overlays for cumulative data points only */}
         {cumulativePoints.map((point, index) => (
           <Pressable
             key={`cumulative-pressable-${index}`}
             style={[
               styles.dataPointOverlay,
               {
-                left: point.x - 22,
-                top: point.y - 22,
+                left: point.x - 30, // Increased touch area for bigger nodes
+                top: point.y - 30,
               }
             ]}
             onPress={() => handlePointPress(index, 'cumulative', undefined, point.x, point.y)}
@@ -464,8 +407,8 @@ const styles = StyleSheet.create({
   },
   dataPointOverlay: {
     position: 'absolute',
-    width: 44,
-    height: 44,
+    width: 60, // Increased from 44 to 60 for bigger touch area
+    height: 60, // Increased from 44 to 60 for bigger touch area
     backgroundColor: 'transparent',
     pointerEvents: 'auto',
   },
@@ -502,7 +445,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
     padding: 16,
-    minWidth: 150,
+    width: 200, // Fixed width instead of minWidth
     shadowColor: '#000000',
     shadowOffset: {
       width: 0,
@@ -535,12 +478,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    minHeight: 20, // Ensure consistent height
   },
   tooltipColorDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     marginRight: 8,
+    flexShrink: 0, // Prevent shrinking
   },
   tooltipBreakdownName: {
     flex: 1,
@@ -548,11 +493,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#A7A7A7',
     fontFamily: 'Inter',
+    marginRight: 8, // Add space between name and hours
   },
   tooltipBreakdownHours: {
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'Inter',
+    flexShrink: 0, // Prevent shrinking
   },
 });

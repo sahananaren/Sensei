@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCallback } from 'react';
 import { 
   View, 
@@ -9,7 +9,8 @@ import {
   Modal,
   Pressable,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { Plus, Target, Clock, Flame } from 'lucide-react-native';
 import { Trash2 } from 'lucide-react-native';
@@ -20,6 +21,8 @@ import { useVisions, VisionWithHabits, Habit } from '@/hooks/useVisions';
 import { useFocusSessions } from '@/hooks/useFocusSessions';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
 import { supabase } from '@/lib/supabase';
+import { useSubscription } from '@/hooks/useSubscription';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface HabitCardProps {
   habit: Habit;
@@ -251,6 +254,23 @@ export default function TodayTab() {
   const [isDeleting, setIsDeleting] = useState(false);
   const { visions, loading, error, refetch } = useVisions();
   const { user } = useAuth();
+  const { showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
+
+  // Show upgrade on first visit
+  useEffect(() => {
+    const checkFirstVisit = async () => {
+      const hasVisited = await AsyncStorage.getItem('has_visited_before');
+      if (!hasVisited) {
+        await AsyncStorage.setItem('has_visited_before', 'true');
+        // Show upgrade after a short delay
+        setTimeout(() => {
+          showUpgrade();
+        }, 2000);
+      }
+    };
+    
+    checkFirstVisit();
+  }, []);
 
   // Refetch visions when screen comes into focus
   useFocusEffect(
@@ -277,13 +297,9 @@ export default function TodayTab() {
   };
 
   const handleHabitPress = (habit: Habit, vision: VisionWithHabits) => {
-    // Navigate to focus session with habit and vision data
     router.push({
-      pathname: `/focus-session/${habit.id}`,
-      params: {
-        habit: JSON.stringify(habit),
-        vision: JSON.stringify(vision),
-      },
+      pathname: "/focus-session/[habitId]",
+      params: { habitId: habit.id }
     });
   };
 
