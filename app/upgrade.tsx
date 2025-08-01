@@ -58,7 +58,7 @@ export default function UpgradeScreen({ visible, onClose, onSelectPlan }: Upgrad
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color="#A7A7A7" />
             </TouchableOpacity>
           </View>
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    backgroundColor: 'white',
+    backgroundColor: '#111111', // Card Background
     borderRadius: 16,
     width: Dimensions.get('window').width - 40,
     maxHeight: Dimensions.get('window').height * 0.8,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#000',
+    color: '#FFFFFF', // Font Primary
     textAlign: 'center',
     marginBottom: 8,
     fontFamily: 'Inter-Bold',
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#666',
+    color: '#A7A7A7', // Font Secondary
     textAlign: 'center',
     marginBottom: 32,
     fontFamily: 'Inter-Regular',
@@ -181,13 +181,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: 'white',
+    borderColor: '#1C1C1C', // Darker border for card background
+    backgroundColor: '#0A0A0A', // App background for contrast
     position: 'relative',
   },
   selectedOption: {
     borderColor: '#329BA4',
-    backgroundColor: '#F8FCFC',
+    backgroundColor: '#0A0A0A', // Keep app background for selected state
   },
   selectionIndicator: {
     marginRight: 12,
@@ -205,8 +205,8 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: 'white',
+    borderColor: '#1C1C1C',
+    backgroundColor: '#111111', // Card background
   },
   optionContent: {
     flex: 1,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: '#FFFFFF', // Font Primary
     fontFamily: 'Inter-SemiBold',
   },
   discountTag: {
@@ -232,13 +232,13 @@ const styles = StyleSheet.create({
   discountText: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'white',
+    color: '#FFFFFF', // Font Primary
     fontFamily: 'Inter-SemiBold',
   },
   optionDuration: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#666',
+    color: '#A7A7A7', // Font Secondary
     fontFamily: 'Inter-Regular',
   },
   priceContainer: {
@@ -247,13 +247,13 @@ const styles = StyleSheet.create({
   monthlyPrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: '#FFFFFF', // Font Primary
     fontFamily: 'Inter-SemiBold',
   },
   savingsText: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#329BA4',
+    color: '#329BA4', // Accent color
     marginTop: 2,
     fontFamily: 'Inter-Regular',
   },
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   continueButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
+    color: '#FFFFFF', // Font Primary
     fontFamily: 'Inter-SemiBold',
   },
   restoreButton: {
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   restoreButtonText: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#329BA4',
+    color: '#A7A7A7', // Font Secondary
     fontFamily: 'Inter-Regular',
   },
 }); 

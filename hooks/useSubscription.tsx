@@ -10,6 +10,8 @@ interface SubscriptionContextType {
     visionCount: number;
     maxVisions: number;
   };
+  incrementVisionCount: () => void;
+  checkUpgradeRequired: () => boolean;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -20,6 +22,7 @@ interface SubscriptionProviderProps {
 
 export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   const [isUpgradeVisible, setIsUpgradeVisible] = useState(false);
+  const [visionCount, setVisionCount] = useState(0);
 
   const showUpgrade = () => setIsUpgradeVisible(true);
   const hideUpgrade = () => setIsUpgradeVisible(false);
@@ -29,10 +32,23 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     hideUpgrade();
   };
 
+  const incrementVisionCount = () => {
+    setVisionCount(prev => prev + 1);
+  };
+
+  // For testing purposes, set isPro to true to allow 4 visions
+  // In production, this would come from actual subscription data
+  const isPro = true; // Set to true for testing 4 vision limit
+  const maxVisions = isPro ? 4 : 1;
+
+  const checkUpgradeRequired = () => {
+    return visionCount >= maxVisions;
+  };
+
   const subscription = {
-    isPro: false, // Default to free plan
-    visionCount: 0,
-    maxVisions: 3, // Free plan limit
+    isPro,
+    visionCount,
+    maxVisions,
   };
 
   const value = {
@@ -41,6 +57,8 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     hideUpgrade,
     handleUpgrade,
     subscription,
+    incrementVisionCount,
+    checkUpgradeRequired,
   };
 
   return (

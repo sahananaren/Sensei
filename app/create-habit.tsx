@@ -18,6 +18,7 @@ import { X, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useVisions } from '@/hooks/useVisions';
+import { useVisionsForMastery, VisionWithHabits } from '@/hooks/useVisions';
 
 interface VisionDropdownProps {
   visions: Array<{ id: string; name: string; color: string }>;
@@ -109,6 +110,73 @@ function ExitWarningModal({ visible, onCancel, onExit }: ExitWarningModalProps) 
   );
 }
 
+interface LimitWarningModalProps {
+  visible: boolean;
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+}
+
+function LimitWarningModal({ visible, title, subtitle, onClose }: LimitWarningModalProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.modalOverlay}>
+        <View style={styles.limitModalContainer}>
+          <Text style={styles.limitModalTitle}>{title}</Text>
+          <Text style={styles.limitModalSubtitle}>{subtitle}</Text>
+          
+          <TouchableOpacity
+            style={styles.limitModalButton}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.limitModalButtonText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+interface CongratsModalProps {
+  visible: boolean;
+  habitName: string;
+  onClose: () => void;
+}
+
+function CongratsModal({ visible, habitName, onClose }: CongratsModalProps) {
+  const handleClose = () => {
+    console.log('Congrats modal close button tapped');
+    onClose();
+  };
+
+  const handleOverlayPress = () => {
+    console.log('Congrats modal overlay tapped');
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Pressable style={styles.modalOverlay} onPress={handleOverlayPress}>
+        <View style={styles.congratsContainer}>
+          <TouchableOpacity
+            style={styles.congratsCloseButton}
+            onPress={handleClose}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <X size={20} color="#A7A7A7" />
+          </TouchableOpacity>
+          
+          <Text style={styles.congratsTitle}>
+            Congrats on creating your new habit '{habitName}'
+          </Text>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function CreateHabitScreen() {
   const { user } = useAuth();
   const { visions, loading: visionsLoading } = useVisions();
@@ -116,7 +184,10 @@ export default function CreateHabitScreen() {
   const [habitName, setHabitName] = useState('');
   const [selectedVision, setSelectedVision] = useState<{ id: string; name: string; color: string } | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showCongratsModal, setShowCongratsModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const hasFormData = () => {
     return habitName.trim() !== '' || selectedVision !== null;
@@ -135,12 +206,27 @@ export default function CreateHabitScreen() {
     router.back();
   };
 
+  const handleCongratsClose = () => {
+    setShowCongratsModal(false);
+    // Navigate to today page instead of just going back
+    router.replace('/(tabs)');
+  };
+
   const canCreateHabit = habitName.trim() !== '' && selectedVision !== null;
 
   const handleCreateHabit = async () => {
     if (!user || !canCreateHabit) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
+    }
+
+    // Check habit limit for the selected vision
+    if (selectedVision) {
+      const selectedVisionData = visions.find(v => v.id === selectedVision.id);
+      if (selectedVisionData && selectedVisionData.habits.length >= 3) {
+        setShowLimitModal(true);
+        return;
+      }
     }
 
     setIsCreating(true);
@@ -156,8 +242,8 @@ export default function CreateHabitScreen() {
 
       if (error) throw error;
 
-      // Navigate back to today screen
-      router.back();
+      // Show congrats modal instead of navigating back immediately
+      setShowCongratsModal(true);
       
     } catch (error) {
       console.error('Error creating habit:', error);
@@ -277,6 +363,19 @@ export default function CreateHabitScreen() {
         visible={showExitModal}
         onCancel={() => setShowExitModal(false)}
         onExit={handleExit}
+      />
+      
+      <CongratsModal
+        visible={showCongratsModal}
+        habitName={habitName}
+        onClose={handleCongratsClose}
+      />
+      
+      <LimitWarningModal
+        visible={showLimitModal}
+        title="Maximum of 3 habits to maintain focus"
+        subtitle="Graduate or delete an existing habit to start a new one."
+        onClose={() => setShowLimitModal(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -522,5 +621,70 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  limitModalContainer: {
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  limitModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  limitModalSubtitle: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  limitModalButton: {
+    backgroundColor: '#329BA4',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  limitModalButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+  },
+  congratsContainer: {
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    position: 'relative',
+  },
+  congratsCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 40, // Increased from 32
+    height: 40, // Increased from 32
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  congratsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingRight: 32,
   },
 });

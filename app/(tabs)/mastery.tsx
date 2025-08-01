@@ -12,48 +12,53 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { ChevronDown, ChevronUp, Plus, Pencil, Trash2, Check, X } from 'lucide-react-native';
-import { useVisions, VisionWithHabits } from '@/hooks/useVisions';
+import { useVisionsForMastery, VisionWithHabits } from '@/hooks/useVisions';
 import { useFocusSessions } from '@/hooks/useFocusSessions';
 import { useMilestones } from '@/hooks/useMilestones';
 import CalendarHeatmap from '@/components/CalendarHeatmap';
+import { ConfirmationModal } from '@/components/ConfirmationModal';
 import { supabase } from '@/lib/supabase';
 
 interface VisionTabsProps {
   visions: VisionWithHabits[];
   selectedVision: VisionWithHabits | null;
   onSelectVision: (vision: VisionWithHabits) => void;
+  onDeleteVision: (vision: VisionWithHabits) => void;
 }
 
-function VisionTabs({ visions, selectedVision, onSelectVision }: VisionTabsProps) {
+function VisionTabs({ visions, selectedVision, onSelectVision, onDeleteVision }: VisionTabsProps) {
   return (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.tabsContainer}
-      contentContainerStyle={styles.tabsContent}
-    >
-      {visions.map((vision) => (
-        <TouchableOpacity
-          key={vision.id}
-          style={[
-            styles.tab,
-            selectedVision?.id === vision.id && styles.tabActive
-          ]}
-          onPress={() => onSelectVision(vision)}
-          activeOpacity={0.7}
-        >
-          <Text style={[
-            styles.tabText,
-            selectedVision?.id === vision.id && styles.tabTextActive
-          ]}>
-            {vision.name}
-          </Text>
-          {selectedVision?.id === vision.id && (
-            <View style={[styles.tabIndicator, { backgroundColor: vision.color }]} />
-          )}
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.tabsContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsContent}
+      >
+        {visions.map((vision) => (
+          <TouchableOpacity
+            key={vision.id}
+            style={[
+              styles.tab,
+              selectedVision?.id === vision.id && styles.tabActive,
+              vision.status === 'graduated' && styles.tabGraduated
+            ]}
+            onPress={() => onSelectVision(vision)}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.tabText,
+              selectedVision?.id === vision.id && styles.tabTextActive,
+              vision.status === 'graduated' && styles.tabTextGraduated
+            ]}>
+              {vision.name}
+            </Text>
+            {selectedVision?.id === vision.id && (
+              <View style={[styles.tabIndicator, { backgroundColor: vision.color }]} />
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -171,55 +176,78 @@ interface StatsCardsProps {
     duration_minutes: number;
   }>;
   visionCreatedAt: string;
+  isGraduated?: boolean;
+  graduatedAt?: string | null;
 }
 
-function StatsCards({ sessions, visionCreatedAt }: StatsCardsProps) {
+function StatsCards({ sessions, visionCreatedAt, isGraduated, graduatedAt }: StatsCardsProps) {
   const calculateStats = () => {
-    const now = new Date();
+    const now = new Date(); // Use local time
     const createdDate = new Date(visionCreatedAt);
-    const daysSinceCreation = Math.max(1, Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     
-    // Get unique days with sessions
+    // For graduated visions, use graduation date instead of current date
+    const endDate = isGraduated && graduatedAt ? new Date(graduatedAt) : now;
+    
+    const daysSinceCreation = Math.max(1, Math.floor((endDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    // Get unique days with sessions (only up to graduation date for graduated visions)
     const sessionDays = new Set(
-      sessions.map(session => 
-        new Date(session.completed_at).toDateString()
-      )
+      sessions
+        .filter(session => {
+          if (isGraduated && graduatedAt) {
+            return new Date(session.completed_at) <= new Date(graduatedAt);
+          }
+          return true;
+        })
+        .map(session => 
+          new Date(session.completed_at).toDateString() // Use local time
+        )
     );
     const engagedDays = sessionDays.size;
     
     // Calculate total minutes and daily average
-    const totalMinutes = sessions.reduce((sum, session) => sum + session.duration_minutes, 0);
+    const totalMinutes = sessions
+      .filter(session => {
+        if (isGraduated && graduatedAt) {
+          return new Date(session.completed_at) <= new Date(graduatedAt);
+        }
+        return true;
+      })
+      .reduce((sum, session) => sum + session.duration_minutes, 0);
     const dailyAverage = daysSinceCreation > 0 ? Math.round(totalMinutes / daysSinceCreation) : 0;
     
-    // Calculate current streak
+    // Calculate longest streak - use local time
+    const sortedSessionDates = Array.from(sessionDays)
+      .map(dateStr => new Date(dateStr)) // Use local time
+      .sort((a, b) => a.getTime() - b.getTime());
+    
+    let longestStreak = 0;
     let currentStreak = 0;
-    const today = now.toDateString();
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayString = yesterday.toDateString();
     
-    // Start checking from today if there's a session today, otherwise from yesterday
-    let checkDate = new Date(now);
-    if (!sessionDays.has(today) && sessionDays.has(yesterdayString)) {
-      // If no session today but there was one yesterday, start from yesterday
-      checkDate = yesterday;
-    }
-    
-    while (true) {
-      const dateString = checkDate.toDateString();
-      if (sessionDays.has(dateString)) {
-        currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
+    for (let i = 0; i < sortedSessionDates.length; i++) {
+      if (i === 0) {
+        currentStreak = 1;
       } else {
-        break;
+        const currentDate = sortedSessionDates[i];
+        const previousDate = sortedSessionDates[i - 1];
+        const daysDiff = Math.floor((currentDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff === 1) {
+          currentStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, currentStreak);
+          currentStreak = 1;
+        }
       }
     }
+    
+    longestStreak = Math.max(longestStreak, currentStreak);
     
     return {
       engagedDays,
       totalDays: daysSinceCreation,
       dailyAverage,
-      currentStreak,
+      longestStreak,
     };
   };
 
@@ -238,8 +266,8 @@ function StatsCards({ sessions, visionCreatedAt }: StatsCardsProps) {
       </View>
       
       <View style={styles.statCard}>
-        <Text style={styles.statValue}>{stats.currentStreak} days</Text>
-        <Text style={styles.statLabel}>Current Streak</Text>
+        <Text style={styles.statValue}>{stats.longestStreak} days</Text>
+        <Text style={styles.statLabel}>Longest Streak</Text>
       </View>
     </View>
   );
@@ -248,9 +276,10 @@ function StatsCards({ sessions, visionCreatedAt }: StatsCardsProps) {
 interface MilestonesAccordionProps {
   visionId: string;
   visionColor: string;
+  isGraduated: boolean; // Add this prop
 }
 
-function MilestonesAccordion({ visionId, visionColor }: MilestonesAccordionProps) {
+function MilestonesAccordion({ visionId, visionColor, isGraduated }: MilestonesAccordionProps) {
   const { milestones, addMilestone, updateMilestone, deleteMilestone } = useMilestones(visionId);
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -404,23 +433,25 @@ function MilestonesAccordion({ visionId, visionColor }: MilestonesAccordionProps
                     )}
                   </TouchableOpacity>
                   <Text style={styles.milestoneText}>{milestone.name}</Text>
-                  <View style={styles.milestoneActions}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setEditingId(milestone.id);
-                        setEditText(milestone.name);
-                      }}
-                      style={styles.milestoneAction}
-                    >
-                      <Pencil size={16} color="#A7A7A7" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteMilestone(milestone.id)}
-                      style={styles.milestoneAction}
-                    >
-                      <Trash2 size={16} color="#A7A7A7" />
-                    </TouchableOpacity>
-                  </View>
+                  {!isGraduated && ( // Only show edit/delete buttons for active visions
+                    <View style={styles.milestoneActions}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingId(milestone.id);
+                          setEditText(milestone.name);
+                        }}
+                        style={styles.milestoneAction}
+                      >
+                        <Pencil size={16} color="#A7A7A7" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteMilestone(milestone.id)}
+                        style={styles.milestoneAction}
+                      >
+                        <Trash2 size={16} color="#C04B76" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </>
               )}
             </View>
@@ -457,14 +488,18 @@ function MilestonesAccordion({ visionId, visionColor }: MilestonesAccordionProps
               </View>
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.addMilestoneButton}
-              onPress={() => setIsAdding(true)}
-              activeOpacity={0.7}
-            >
-              <Plus size={16} color={visionColor} />
-              <Text style={[styles.addMilestoneText, { color: visionColor }]}>Add Milestone</Text>
-            </TouchableOpacity>
+            !isGraduated && ( // Only show add milestone button for active visions
+              <TouchableOpacity
+                style={styles.addMilestoneButton}
+                onPress={() => setIsAdding(true)}
+                activeOpacity={0.7}
+              >
+                <Plus size={16} color={visionColor} />
+                <Text style={[styles.addMilestoneText, { color: visionColor }]}>
+                  Add Milestone
+                </Text>
+              </TouchableOpacity>
+            )
           )}
         </View>
       )}
@@ -529,18 +564,68 @@ function DayLogViewer({ selectedDate, getSessionsForDate, visionName }: DayLogVi
 }
 
 export default function MasteryTab() {
-  const { visions, loading: visionsLoading } = useVisions();
+  const { visions, loading, error, refetch } = useVisionsForMastery();
+  const { sessions } = useFocusSessions();
   const [selectedVision, setSelectedVision] = useState<VisionWithHabits | null>(null);
+  const [showDeleteVisionModal, setShowDeleteVisionModal] = useState(false);
+  const [visionToDelete, setVisionToDelete] = useState<VisionWithHabits | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const { sessions, loading: sessionsLoading } = useFocusSessions(selectedVision?.id);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]); // Set today as default
 
-  // Set first vision as selected when visions load
+  // Set the first vision as selected when visions load
   React.useEffect(() => {
     if (visions.length > 0 && !selectedVision) {
       setSelectedVision(visions[0]);
     }
   }, [visions, selectedVision]);
+
+  const handleDeleteVision = (vision: VisionWithHabits) => {
+    setVisionToDelete(vision);
+    setShowDeleteVisionModal(true);
+  };
+
+  const confirmDeleteVision = async () => {
+    if (!visionToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete all habits associated with this vision first
+      const { error: habitsError } = await supabase
+        .from('habits')
+        .delete()
+        .eq('vision_id', visionToDelete.id);
+
+      if (habitsError) throw habitsError;
+
+      // Delete the vision
+      const { error: visionError } = await supabase
+        .from('visions')
+        .delete()
+        .eq('id', visionToDelete.id);
+
+      if (visionError) throw visionError;
+
+      setShowDeleteVisionModal(false);
+      setVisionToDelete(null);
+      refetch();
+      
+      // If the deleted vision was selected, select the first available vision
+      if (selectedVision?.id === visionToDelete.id) {
+        const remainingVisions = visions.filter(v => v.id !== visionToDelete.id);
+        if (remainingVisions.length > 0) {
+          setSelectedVision(remainingVisions[0]);
+        } else {
+          setSelectedVision(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting vision:', error);
+      Alert.alert('Error', 'Failed to delete vision. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const updateVisionDescription = async (newDescription: string) => {
     if (!selectedVision) return;
@@ -594,22 +679,51 @@ export default function MasteryTab() {
     }
   };
 
-  const getSessionsForSelectedDate = (date: string) => {
-    const targetDate = new Date(date).toISOString().split('T')[0];
-    return sessions.filter(session => 
-      new Date(session.completed_at).toISOString().split('T')[0] === targetDate
-    );
+  // Add a function to filter sessions by vision:
+  const getVisionSessions = () => {
+    if (!selectedVision) return [];
+    
+    // Get all habit IDs for the selected vision
+    const visionHabitIds = selectedVision.habits.map(habit => habit.id);
+    
+    // Filter sessions to only include those from this vision's habits
+    return sessions.filter(session => visionHabitIds.includes(session.habit_id));
   };
 
-  const calculateMasteryStats = () => {
-    if (!sessions.length || !selectedVision) return { hours: 0, timeUnit: 'days', timeValue: 1, showFullDays: false };
+  // Update the component calls to use filtered sessions:
+  const getSessionsForSelectedDate = (date: string) => {
+    if (!date || !selectedVision) return [];
+    
+    try {
+      const targetDate = new Date(date); // Use local time
+      const visionSessions = getVisionSessions();
+      
+      return visionSessions.filter(session => 
+        new Date(session.completed_at).toISOString().split('T')[0] === targetDate.toISOString().split('T')[0]
+      );
+    } catch (error) {
+      console.error('Error parsing date:', error);
+      return [];
+    }
+  };
 
-    const totalMinutes = sessions.reduce((sum, session) => sum + session.duration_minutes, 0);
+  // Calculate mastery stats and full days
+  const calculateMasteryStats = () => {
+    const visionSessions = getVisionSessions();
+    if (!visionSessions.length || !selectedVision) return { hours: 0, timeUnit: 'days', timeValue: 1, showFullDays: false };
+
+    const totalMinutes = visionSessions.reduce((sum, session) => sum + session.duration_minutes, 0);
     const hours = Math.round(totalMinutes / 60);
     
-    // Calculate days since vision creation (minimum 1 day)
+    // Calculate days since vision creation (minimum 1 day) - use local time
     const visionCreated = new Date(selectedVision.created_at);
-    const daysSinceStart = Math.max(1, Math.floor((Date.now() - visionCreated.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    // For graduated visions, use graduation date instead of current date
+    const endDate = selectedVision.status === 'graduated' && selectedVision.graduated_at 
+      ? new Date(selectedVision.graduated_at)
+      : new Date(); // Use local time
+        
+    const daysSinceStart = Math.max(1, Math.floor((endDate.getTime() - visionCreated.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     
     // Show "full days" caption only after 24+ hours
     const showFullDays = hours >= 24;
@@ -621,110 +735,148 @@ export default function MasteryTab() {
       return { hours, timeUnit: 'months', timeValue: months, showFullDays };
     }
   };
+  const masteryStats = calculateMasteryStats();
+  const fullDays = Math.floor(masteryStats.hours / 24);
 
-  if (visionsLoading) {
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#329BA4" />
-          <Text style={styles.loadingText}>Loading your visions...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#329BA4" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Error: {error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   if (visions.length === 0) {
     return (
-      <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
-            No visions yet. Create your first vision to start tracking your mastery journey!
-          </Text>
-        </View>
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No visions found</Text>
+        <Text style={styles.emptySubtext}>Create your first vision to start tracking mastery</Text>
       </View>
     );
   }
-
-  if (!selectedVision) {
-    return (
-      <View style={styles.container}>
-      </View>
-    );
-  }
-
-  const masteryStats = calculateMasteryStats();
-  const fullDays = Math.round(masteryStats.hours / 24);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLine} />
-        {visions.length > 1 && (
-          <VisionTabs
-            visions={visions}
-            selectedVision={selectedVision}
-            onSelectVision={setSelectedVision}
-          />
-        )}
-      </View>
+      <VisionTabs
+        visions={visions}
+        selectedVision={selectedVision}
+        onSelectVision={setSelectedVision}
+        onDeleteVision={handleDeleteVision}
+      />
 
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.visionHeader}>
-          <EditableVisionName
-            name={selectedVision.name}
-            onSave={updateVisionName}
-          />
-          <EditableDescription
-            description={selectedVision.description || ''}
-            onSave={updateVisionDescription}
-            placeholder="Write a motivating description for your Vision..."
-          />
-        </View>
+      {selectedVision && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.scrollContent}>
+            {/* Add graduated vision elements here, above the vision header */}
+            {selectedVision.status === 'graduated' && (
+              <View style={styles.graduatedVisionHeader}>
+                <View style={[styles.graduatedTag, { 
+                  backgroundColor: `${selectedVision.color}40`, // 40% opacity
+                  borderColor: selectedVision.color // 100% opacity stroke
+                }]}>
+                  <Text style={[styles.graduatedTagText, { color: selectedVision.color }]}>
+                    Graduated  |  {new Date(selectedVision.created_at).toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: '2-digit', 
+                      year: '2-digit' 
+                    })} - {selectedVision.graduated_at ? new Date(selectedVision.graduated_at).toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: '2-digit', 
+                      year: '2-digit' 
+                    }) : 'Present'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.deleteVisionButton}
+                  onPress={() => handleDeleteVision(selectedVision)}
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={16} color="#C04B76" />
+                </TouchableOpacity>
+              </View>
+            )}
 
-        <View style={styles.masteryStatsContainer}>
-          <Text style={styles.masteryStatsTitle}>
-            {masteryStats.hours} hours in {masteryStats.timeValue} {masteryStats.timeUnit}
-          </Text>
-          {masteryStats.showFullDays && (
-            <Text style={styles.masteryStatsSubtitle}>
-              That's {fullDays} full days!
-            </Text>
-          )}
-        </View>
+            <View style={styles.visionHeader}>
+              <Text style={styles.visionTitle}>
+                {selectedVision.name}
+              </Text>
+              <Text style={styles.visionDescription}>
+                "{selectedVision.description || 'Write a motivating description for your Vision...'}"
+              </Text>
+            </View>
 
-        <StatsCards 
-          sessions={sessions} 
-          visionCreatedAt={selectedVision.created_at}
-        />
+            <View style={styles.masteryStatsContainer}>
+              <Text style={styles.masteryStatsTitle}>
+                {masteryStats.hours} hours in {masteryStats.timeValue} {masteryStats.timeUnit}
+              </Text>
+              {masteryStats.showFullDays && (
+                <Text style={styles.masteryStatsSubtitle}>
+                  That's {fullDays} full days!
+                </Text>
+              )}
+            </View>
 
-        <MilestonesAccordion 
-          visionId={selectedVision.id}
-          visionColor={selectedVision.color}
-        />
+            <StatsCards 
+              sessions={getVisionSessions()} 
+              visionCreatedAt={selectedVision.created_at}
+              isGraduated={selectedVision.status === 'graduated'}
+              graduatedAt={selectedVision.graduated_at}
+            />
 
-        <CalendarHeatmap 
-          sessions={sessions}
-          habits={selectedVision.habits}
-          selectedHabitId={selectedHabitId}
-          onSelectHabit={setSelectedHabitId}
-          visionColor={selectedVision.color}
-          onDayPress={setSelectedDate}
-          selectedDate={selectedDate}
-        />
+            <MilestonesAccordion 
+              visionId={selectedVision.id}
+              visionColor={selectedVision.color}
+              isGraduated={selectedVision.status === 'graduated'} // Add this prop
+            />
 
-        <View style={{ height: 40 }} />
+            <CalendarHeatmap 
+              sessions={getVisionSessions()}
+              habits={selectedVision.habits}
+              selectedHabitId={selectedHabitId}
+              onSelectHabit={setSelectedHabitId}
+              visionColor={selectedVision.color}
+              onDayPress={setSelectedDate}
+              selectedDate={selectedDate}
+            />
 
-        {/* Daily Log Viewer */}
-        <DayLogViewer
-          selectedDate={selectedDate}
-          getSessionsForDate={getSessionsForSelectedDate}
-          visionName={selectedVision.name}
-        />
-      </ScrollView>
+            <View style={{ height: 40 }} />
+
+            {/* Daily Log Viewer */}
+            <DayLogViewer
+              selectedDate={selectedDate}
+              getSessionsForDate={getSessionsForSelectedDate}
+              visionName={selectedVision.name}
+            />
+          </View>
+        </ScrollView>
+      )}
+
+      {/* Delete Vision Confirmation Modal */}
+      <ConfirmationModal
+        visible={showDeleteVisionModal}
+        title="Delete Vision"
+        message={`Are you sure you want to delete "${visionToDelete?.name}"? This action cannot be undone and will permanently delete all associated habits and focus sessions.`}
+        confirmText="Delete Vision"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteVision}
+        onCancel={() => {
+          setShowDeleteVisionModal(false);
+          setVisionToDelete(null);
+        }}
+        loading={isDeleting}
+        destructive={true}
+      />
     </View>
   );
 }
@@ -745,7 +897,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
+    height: 1,
     backgroundColor: '#111111',
   },
   visionHeader: {
@@ -773,17 +925,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
   },
   tabsContainer: {
-    marginBottom: 16,
+    marginBottom: 0,
+    paddingTop: 80,
+    height: 'auto',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1C1C1C',
   },
   tabsContent: {
     paddingHorizontal: 0,
     paddingLeft: 0,
-    gap: 15,
+    gap: 12,
   },
   tab: {
-    paddingVertical: 8,
+    paddingVertical: 0, // Reduce from 8 to 4
     paddingHorizontal: 16,
     position: 'relative',
+    height: 40,
   },
   tabActive: {
     // Active styling handled by indicator
@@ -802,8 +959,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 16,
     right: 16,
-    height: 4,
-    borderRadius: 1,
+    height: 2,
+    borderRadius: 5,
   },
   scrollView: {
     flex: 1,
@@ -1076,5 +1233,99 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#C04B76',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#329BA4',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 80,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    marginTop: 8,
+  },
+  content: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    marginBottom: 0,
+  },
+  tabContainer: {
+    marginRight: 16,
+  },
+  tabHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 0,
+    paddingHorizontal: 4,
+  },
+  graduatedTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  graduatedTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteVisionButton: {
+    padding: 8,
+  },
+  tabGraduated: {
+    opacity: 0.6,
+  },
+  tabTextGraduated: {
+    opacity: 0.4,
+  },
+  graduatedVisionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
 });

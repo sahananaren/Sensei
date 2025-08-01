@@ -84,41 +84,123 @@ function FilterDropdown({ habits, selectedHabitId, onSelectHabit }: FilterDropdo
   );
 }
 
+// Update the interface:
 interface MonthYearPickerModalProps {
   visible: boolean;
   onClose: () => void;
   onDateSelect: (date: Date) => void;
   currentDate: Date;
+  sessions: Array<{ completed_at: string; duration_minutes: number; habit_id: string }>;
+  isGraduated?: boolean;
 }
 
-function MonthYearPickerModal({ visible, onClose, onDateSelect, currentDate }: MonthYearPickerModalProps) {
+// Update the MonthYearPickerModal to remove inactive months:
+function MonthYearPickerModal({ visible, onClose, onDateSelect, currentDate, sessions, isGraduated }: MonthYearPickerModalProps) {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
   
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+  // Get years and months with activity
+  const getActivityData = () => {
+    const activityMap = new Map<string, Set<number>>();
+    
+    sessions.forEach(session => {
+      const sessionDate = new Date(session.completed_at);
+      const year = sessionDate.getFullYear();
+      const month = sessionDate.getMonth();
+      
+      if (!activityMap.has(year.toString())) {
+        activityMap.set(year.toString(), new Set());
+      }
+      activityMap.get(year.toString())!.add(month);
+    });
+    
+    // For active visions, always include current year and month
+    if (!isGraduated) {
+      const currentYear = currentDate.getFullYear();
+      const currentMonth = currentDate.getMonth();
+      
+      if (!activityMap.has(currentYear.toString())) {
+        activityMap.set(currentYear.toString(), new Set());
+      }
+      activityMap.get(currentYear.toString())!.add(currentMonth);
+    }
+    
+    return activityMap;
+  };
+  
+  // Get available months for selected year
+  const getAvailableMonths = (year: number) => {
+    const activityMap = getActivityData();
+    const activeMonths = activityMap.get(year.toString()) || new Set<number>();
+    
+    if (isGraduated) {
+      // For graduated visions: only show months with activity
+      return Array.from(activeMonths).sort((a, b) => a - b);
+    } else {
+      // For active visions: show active months + current month if it's the current year
+      const currentYear = currentDate.getFullYear();
+      const currentMonth = currentDate.getMonth();
+      
+      const allMonths = new Set(activeMonths);
+      if (year === currentYear) {
+        allMonths.add(currentMonth);
+      }
+      
+      return Array.from(allMonths).sort((a, b) => a - b);
+    }
+  };
+  
+  // Get the default month/year based on vision status
+  const getDefaultDate = () => {
+    const activityMap = getActivityData();
+    const activityYears = Array.from(activityMap.keys()).map(Number).sort((a, b) => b - a);
+    
+    if (isGraduated && activityYears.length > 0) {
+      // For graduated visions, use the last activity year
+      const lastYear = activityYears[0];
+      const lastYearMonths = Array.from(activityMap.get(lastYear.toString())!).sort((a, b) => b - a);
+      return { year: lastYear, month: lastYearMonths[0] };
+    } else {
+      // For active visions, use current date
+      return { year: currentDate.getFullYear(), month: currentDate.getMonth() };
+    }
+  };
+  
+  // Set default when modal opens
+  React.useEffect(() => {
+    if (visible) {
+      const defaultDate = getDefaultDate();
+      setSelectedYear(defaultDate.year);
+      setSelectedMonth(defaultDate.month);
+    }
+  }, [visible, isGraduated]);
+  
+  const activityMap = getActivityData();
+  const activityYears = Array.from(activityMap.keys()).map(Number).sort((a, b) => b - a);
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   
+  const availableMonths = getAvailableMonths(selectedYear);
+  
   const handleConfirm = () => {
-    const newDate = new Date(selectedYear, selectedMonth, 1);
-    onDateSelect(newDate);
+    const selectedDate = new Date(selectedYear, selectedMonth, 1);
+    onDateSelect(selectedDate);
     onClose();
   };
-  
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <View style={styles.monthPickerModal}>
-          <Text style={styles.monthPickerTitle}>Select Month & Year</Text>
+          <Text style={styles.monthPickerTitle}>Select Month</Text>
           
           <View style={styles.monthPickerContent}>
             <View style={styles.monthPickerSection}>
               <Text style={styles.monthPickerSectionTitle}>Year</Text>
               <View style={styles.monthPickerGrid}>
-                {years.map((year) => (
+                {activityYears.map((year) => (
                   <TouchableOpacity
                     key={year}
                     style={[
@@ -142,21 +224,21 @@ function MonthYearPickerModal({ visible, onClose, onDateSelect, currentDate }: M
             <View style={styles.monthPickerSection}>
               <Text style={styles.monthPickerSectionTitle}>Month</Text>
               <View style={styles.monthPickerGrid}>
-                {months.map((month, index) => (
+                {availableMonths.map((monthIndex) => (
                   <TouchableOpacity
-                    key={month}
+                    key={`${selectedYear}-${monthIndex}`}
                     style={[
                       styles.monthPickerItem,
-                      selectedMonth === index && styles.monthPickerItemActive
+                      selectedMonth === monthIndex && styles.monthPickerItemActive
                     ]}
-                    onPress={() => setSelectedMonth(index)}
+                    onPress={() => setSelectedMonth(monthIndex)}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.monthPickerItemText,
-                      selectedMonth === index && styles.monthPickerItemTextActive
+                      selectedMonth === monthIndex && styles.monthPickerItemTextActive
                     ]}>
-                      {month.substring(0, 3)}
+                      {months[monthIndex]}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -172,7 +254,6 @@ function MonthYearPickerModal({ visible, onClose, onDateSelect, currentDate }: M
             >
               <Text style={styles.monthPickerCancelText}>Cancel</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity
               style={styles.monthPickerConfirmButton}
               onPress={handleConfirm}
@@ -248,6 +329,7 @@ export default function CalendarHeatmap({
     };
   };
 
+  // Update the getIntensityColor function to show 5 levels of opacity:
   const getIntensityColor = (minutes: number) => {
     if (minutes === 0) return '#1C1C1C';
     
@@ -264,28 +346,49 @@ export default function CalendarHeatmap({
     const rgb = hexToRgb(visionColor);
     if (!rgb) return visionColor; // Fallback to original color
     
-    // Create different intensities based on minutes
-    if (minutes < 30) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`;
-    if (minutes < 60) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`;
-    if (minutes < 120) return visionColor;
-    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1.2)`; // Slightly more intense
+    // Create 5 levels of opacity based on minutes
+    if (minutes < 15) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`; // 20%
+    if (minutes < 30) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`; // 40%
+    if (minutes < 60) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`; // 60%
+    if (minutes < 120) return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`; // 80%
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1.0)`; // 100%
   };
 
   const { year, month, daysInMonth, startingDayOfWeek, sessionsByDay } = getMonthData();
   const monthName = new Date(year, month).toLocaleDateString('en-US', { month: 'long' });
 
-  // Create calendar grid
-  const calendarDays = [];
-  
-  // Add empty cells for days before month starts
-  for (let i = 0; i < startingDayOfWeek; i++) {
-    calendarDays.push(null);
-  }
-  
-  // Add days of the month
-  for (let day = 1; day <= daysInMonth; day++) {
-    calendarDays.push(day);
-  }
+  // Replace the calendar rendering logic with a proper 7-column grid:
+  const renderCalendarGrid = () => {
+    const weeks = [];
+    let currentWeek = [];
+    
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      currentWeek.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      currentWeek.push(day);
+      
+      // If we have 7 days in the week, start a new week
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+    
+    // Add remaining days to the last week
+    if (currentWeek.length > 0) {
+      // Fill remaining slots with null
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      weeks.push(currentWeek);
+    }
+    
+    return weeks;
+  };
 
   return (
     <View style={styles.container}>
@@ -315,40 +418,43 @@ export default function CalendarHeatmap({
       </View>
 
       <View style={styles.calendar}>
-        {calendarDays.map((day, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.calendarDay,
-              {
-                backgroundColor: day 
-                  ? getIntensityColor(sessionsByDay[day] || 0)
-                  : 'transparent'
-              },
-              // Fix: Add proper type checking for the conditional style
-              day && selectedDate && new Date(Date.UTC(year, month, day)).toISOString().split('T')[0] === selectedDate ? {
-                borderWidth: 2,
-                borderColor: visionColor,
-              } : {}
-            ]}
-            onPress={() => {
-              if (day && onDayPress) {
-                const clickedDate = new Date(Date.UTC(year, month, day));
-                onDayPress(clickedDate.toISOString().split('T')[0]);
-              }
-            }}
-            disabled={!day}
-            activeOpacity={0.7}
-          >
-            {day && (
-              <View style={styles.dayContent}>
-                <Text style={styles.dayNumber}>{day}</Text>
-                {sessionsByDay[day] > 0 && (
-                  <Text style={styles.dayMinutes}>{sessionsByDay[day]}m</Text>
+        {renderCalendarGrid().map((week, weekIndex) => (
+          <View key={weekIndex} style={styles.weekRow}>
+            {week.map((day, dayIndex) => (
+              <TouchableOpacity
+                key={dayIndex}
+                style={[
+                  styles.calendarDay,
+                  {
+                    backgroundColor: day 
+                      ? getIntensityColor(sessionsByDay[day] || 0)
+                      : 'transparent'
+                  },
+                  day && selectedDate && new Date(Date.UTC(year, month, day)).toISOString().split('T')[0] === selectedDate ? {
+                    borderWidth: 2,
+                    borderColor: visionColor,
+                  } : {}
+                ]}
+                onPress={() => {
+                  if (day && onDayPress) {
+                    const clickedDate = new Date(Date.UTC(year, month, day));
+                    onDayPress(clickedDate.toISOString().split('T')[0]);
+                  }
+                }}
+                disabled={!day}
+                activeOpacity={0.7}
+              >
+                {day && (
+                  <View style={styles.dayContent}>
+                    <Text style={styles.dayNumber}>{day}</Text>
+                    {sessionsByDay[day] > 0 && (
+                      <Text style={styles.dayMinutes}>{sessionsByDay[day]}m</Text>
+                    )}
+                  </View>
                 )}
-              </View>
-            )}
-          </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </View>
         ))}
       </View>
 
@@ -357,6 +463,8 @@ export default function CalendarHeatmap({
         onClose={() => setShowMonthPicker(false)}
         onDateSelect={setCurrentDate}
         currentDate={currentDate}
+        sessions={sessions}
+        isGraduated={false} // Assuming active vision for now
       />
     </View>
   );
@@ -373,7 +481,8 @@ const itemWidth = (availableWidth - (numberOfDaysInWeek - 1) * gapSize) / number
 
 const styles = StyleSheet.create({
   container: {
-    overflow: 'hidden',
+    width: '100%',
+    paddingHorizontal: 0, // Remove any horizontal padding
   },
   header: {
     flexDirection: 'row',
@@ -416,6 +525,7 @@ const styles = StyleSheet.create({
   weekDays: {
     flexDirection: 'row',
     marginBottom: 8,
+    width: '98%', // Match the calendar width
     gap: gapSize,
   },
   weekDayLabel: {
@@ -424,19 +534,24 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#A7A7A7',
     fontFamily: 'Inter',
-    width: `${100 / 7}%`, // Each day header takes exactly 1/7th of the width
+    width: `${97 / 7}%`,
   },
   calendar: {
+    width: '98%', // Reduce from 100% to 95% to account for gaps
+  },
+  weekRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    width: '98%', // Match the calendar width
+    marginBottom: gapSize,
     gap: gapSize,
   },
   calendarDay: {
-    width: `${100 / 7}%`, // Each day takes exactly 1/7th of the width
+    width: `${98 / 7}%`,
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 4,
+
   },
   dayContent: {
     alignItems: 'center',
@@ -530,6 +645,10 @@ const styles = StyleSheet.create({
   monthPickerItemActive: {
     backgroundColor: '#329BA4',
   },
+  monthPickerItemDisabled: {
+    backgroundColor: '#0A0A0A',
+    opacity: 0.5,
+  },
   monthPickerItemText: {
     fontSize: 14,
     fontWeight: '400',
@@ -539,6 +658,9 @@ const styles = StyleSheet.create({
   monthPickerItemTextActive: {
     color: '#FFFFFF',
     fontWeight: '500',
+  },
+  monthPickerItemTextDisabled: {
+    color: '#666666',
   },
   monthPickerButtons: {
     flexDirection: 'row',

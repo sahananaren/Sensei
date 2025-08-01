@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
-import { Plus, Target, Clock, Flame } from 'lucide-react-native';
+import { Plus, Target, Clock, Flame, MoreVertical } from 'lucide-react-native';
 import { Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,12 +28,15 @@ interface HabitCardProps {
   habit: Habit;
   visionColor: string;
   onPress: (habit: Habit, vision: VisionWithHabits) => void;
+  onGraduateHabit: (habit: Habit) => void;
   onDeleteHabit: (habit: Habit) => void;
   vision: VisionWithHabits;
 }
 
-function HabitCard({ habit, visionColor, onPress, onDeleteHabit, vision }: HabitCardProps) {
+function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit, vision }: HabitCardProps) {
   const { sessions } = useFocusSessions();
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   
   // Calculate today's time for this habit
   const today = new Date().toDateString();
@@ -86,55 +89,111 @@ function HabitCard({ habit, visionColor, onPress, onDeleteHabit, vision }: Habit
   const streak = calculateStreak();
   const hasActivityToday = timeToday > 0;
 
+  const handleMenuPress = (event: any) => {
+    // Get the position of the button
+    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      setMenuPosition({ x: pageX + width - 120, y: pageY + height + 5 }); // Position menu below and align right
+      setShowMenu(true);
+    });
+  };
+
   return (
-    <TouchableOpacity style={styles.habitCard} onPress={() => onPress(habit, vision)} activeOpacity={0.7}>
-      <View style={styles.habitCardContent}>
-        <View style={[styles.streakCircle, { borderColor: hasActivityToday ? visionColor : '#A7A7A7' }]}>
-          <Text style={[styles.streakNumber, { color: hasActivityToday ? visionColor : '#A7A7A7' }]}>
-            {streak}
-          </Text>
+    <>
+      <TouchableOpacity style={styles.habitCard} onPress={() => onPress(habit, vision)} activeOpacity={0.7}>
+        <View style={styles.habitCardContent}>
+          <View style={[styles.streakCircle, { borderColor: hasActivityToday ? visionColor : '#A7A7A7' }]}>
+            <Text style={[styles.streakNumber, { color: hasActivityToday ? visionColor : '#A7A7A7' }]}>
+              {streak}
+            </Text>
+          </View>
+          
+          <View style={styles.habitInfo}>
+            <Text style={styles.habitName}>{habit.name}</Text>
+            <Text style={styles.timeToday}>
+              {timeToday > 0 ? `${timeToday} mins today` : '0 mins today'}
+            </Text>
+          </View>
+          
+          <View style={styles.habitActions}>
+            <Flame size={16} color={hasActivityToday ? visionColor : '#A7A7A7'} />
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={handleMenuPress}
+              activeOpacity={0.7}
+            >
+              <MoreVertical size={16} color="#A7A7A7" />
+            </TouchableOpacity>
+          </View>
         </View>
-        
-        <View style={styles.habitInfo}>
-          <Text style={styles.habitName}>{habit.name}</Text>
-          <Text style={styles.timeToday}>
-            {timeToday > 0 ? `${timeToday} mins today` : '0 mins today'}
-          </Text>
-        </View>
-        
-        <View style={styles.habitActions}>
-          <Flame size={16} color={hasActivityToday ? visionColor : '#A7A7A7'} />
-          <TouchableOpacity
-            style={styles.deleteHabitButton}
-            onPress={() => onDeleteHabit(habit)}
-            activeOpacity={0.7}
-          >
-            <Trash2 size={16} color="#A7A7A7" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* Habit Menu Modal */}
+      <Modal visible={showMenu} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMenu(false)}>
+          <View style={[styles.menuContainer, { 
+            position: 'absolute',
+            left: menuPosition.x,
+            top: menuPosition.y,
+          }]}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                onGraduateHabit(habit);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>Graduate</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                onDeleteHabit(habit);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.menuItemText, styles.deleteMenuItemText]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
 interface VisionSectionProps {
   vision: VisionWithHabits;
   onHabitPress: (habit: Habit, vision: VisionWithHabits) => void;
+  onGraduateVision: (vision: VisionWithHabits) => void;
   onDeleteVision: (vision: VisionWithHabits) => void;
+  onGraduateHabit: (habit: Habit) => void;
   onDeleteHabit: (habit: Habit) => void;
 }
 
-function VisionSection({ vision, onHabitPress, onDeleteVision, onDeleteHabit }: VisionSectionProps) {
+function VisionSection({ vision, onHabitPress, onGraduateVision, onDeleteVision, onGraduateHabit, onDeleteHabit }: VisionSectionProps) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+
+  const handleMenuPress = (event: any) => {
+    // Get the position of the button
+    event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      setMenuPosition({ x: pageX + width - 120, y: pageY + height + 5 }); // Position menu below and align right
+      setShowMenu(true);
+    });
+  };
+
   return (
     <View style={styles.visionSection}>
       <View style={styles.visionHeader}>
         <Text style={styles.visionTitle}>{vision.name}</Text>
         <TouchableOpacity
-          style={styles.deleteVisionButton}
-          onPress={() => onDeleteVision(vision)}
+          style={styles.menuButton}
+          onPress={handleMenuPress}
           activeOpacity={0.7}
         >
-          <Trash2 size={18} color="#A7A7A7" />
+          <MoreVertical size={18} color="#A7A7A7" />
         </TouchableOpacity>
       </View>
       {vision.habits.map((habit) => (
@@ -143,10 +202,44 @@ function VisionSection({ vision, onHabitPress, onDeleteVision, onDeleteHabit }: 
           habit={habit}
           visionColor={vision.color}
           onPress={onHabitPress}
+          onGraduateHabit={onGraduateHabit}
           onDeleteHabit={onDeleteHabit}
           vision={vision}
         />
       ))}
+
+      {/* Vision Menu Modal */}
+      <Modal visible={showMenu} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMenu(false)}>
+          <View style={[styles.menuContainer, { 
+            position: 'absolute',
+            left: menuPosition.x,
+            top: menuPosition.y,
+          }]}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                onGraduateVision(vision);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuItemText}>Graduate</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                onDeleteVision(vision);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.menuItemText, styles.deleteMenuItemText]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -246,15 +339,21 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 }
 
 export default function TodayTab() {
+  const { user } = useAuth();
+  const { visions, loading, error, refetch } = useVisions();
+  const { showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
+  
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showGraduateVisionModal, setShowGraduateVisionModal] = useState(false);
+  const [showGraduateHabitModal, setShowGraduateHabitModal] = useState(false);
+  const [selectedVision, setSelectedVision] = useState<VisionWithHabits | null>(null);
+  const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
   const [showDeleteVisionModal, setShowDeleteVisionModal] = useState(false);
   const [showDeleteHabitModal, setShowDeleteHabitModal] = useState(false);
   const [visionToDelete, setVisionToDelete] = useState<VisionWithHabits | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { visions, loading, error, refetch } = useVisions();
-  const { user } = useAuth();
-  const { showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
 
   // Show upgrade on first visit
   useEffect(() => {
@@ -280,27 +379,35 @@ export default function TodayTab() {
     }, [refetch])
   );
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (error) {
+      console.error('Error refreshing:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleAddVision = () => {
-    // Navigate to vision creation flow
+    if (checkUpgradeRequired()) {
+      showUpgrade();
+      return;
+    }
     router.push('/create-vision');
   };
 
   const handleAddHabit = () => {
-    // Navigate to create habit screen
     router.push('/create-habit');
   };
 
   const handleCreateVision = () => {
-    // Navigate to vision creation flow
     router.push('/create-vision');
   };
 
   const handleHabitPress = (habit: Habit, vision: VisionWithHabits) => {
-    router.push({
-      pathname: "/focus-session/[habitId]",
-      params: { habitId: habit.id }
-    });
+    router.push(`/focus-session/${habit.id}`);
   };
 
   const handleDeleteVision = (vision: VisionWithHabits) => {
@@ -313,21 +420,86 @@ export default function TodayTab() {
     setShowDeleteHabitModal(true);
   };
 
+  const handleGraduateVision = (vision: VisionWithHabits) => {
+    setSelectedVision(vision);
+    setShowGraduateVisionModal(true);
+  };
+
+  const handleGraduateHabit = (habit: Habit) => {
+    setSelectedHabit(habit);
+    setShowGraduateHabitModal(true);
+  };
+
+  const confirmGraduateVision = async () => {
+    if (!selectedVision) return;
+
+    try {
+      const { error } = await supabase
+        .from('visions')
+        .update({
+          status: 'graduated',
+          graduated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedVision.id);
+
+      if (error) throw error;
+
+      setShowGraduateVisionModal(false);
+      setSelectedVision(null);
+      refetch(); // Refresh the visions list
+    } catch (error) {
+      console.error('Error graduating vision:', error);
+      Alert.alert('Error', 'Failed to graduate vision. Please try again.');
+    }
+  };
+
+  const confirmGraduateHabit = async () => {
+    if (!selectedHabit) return;
+
+    try {
+      const { error } = await supabase
+        .from('habits')
+        .update({
+          status: 'graduated',
+          graduated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedHabit.id);
+
+      if (error) throw error;
+
+      setShowGraduateHabitModal(false);
+      setSelectedHabit(null);
+      refetch(); // Refresh the visions list
+    } catch (error) {
+      console.error('Error graduating habit:', error);
+      Alert.alert('Error', 'Failed to graduate habit. Please try again.');
+    }
+  };
+
   const confirmDeleteVision = async () => {
     if (!visionToDelete) return;
 
     setIsDeleting(true);
     try {
-      const { error } = await supabase
+      // Delete all habits associated with this vision first
+      const { error: habitsError } = await supabase
+        .from('habits')
+        .delete()
+        .eq('vision_id', visionToDelete.id);
+
+      if (habitsError) throw habitsError;
+
+      // Delete the vision
+      const { error: visionError } = await supabase
         .from('visions')
         .delete()
         .eq('id', visionToDelete.id);
 
-      if (error) throw error;
+      if (visionError) throw visionError;
 
-      refetch();
       setShowDeleteVisionModal(false);
       setVisionToDelete(null);
+      refetch();
     } catch (error) {
       console.error('Error deleting vision:', error);
       Alert.alert('Error', 'Failed to delete vision. Please try again.');
@@ -348,9 +520,9 @@ export default function TodayTab() {
 
       if (error) throw error;
 
-      refetch();
       setShowDeleteHabitModal(false);
       setHabitToDelete(null);
+      refetch();
     } catch (error) {
       console.error('Error deleting habit:', error);
       Alert.alert('Error', 'Failed to delete habit. Please try again.');
@@ -416,6 +588,13 @@ export default function TodayTab() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#329BA4"
+          />
+        }
       >
         {visions.length > 0 ? (
           visions.map((vision) => (
@@ -423,7 +602,9 @@ export default function TodayTab() {
               key={vision.id}
               vision={vision}
               onHabitPress={handleHabitPress}
+              onGraduateVision={handleGraduateVision}
               onDeleteVision={handleDeleteVision}
+              onGraduateHabit={handleGraduateHabit}
               onDeleteHabit={handleDeleteHabit}
             />
           ))
@@ -438,6 +619,36 @@ export default function TodayTab() {
         onClose={() => setShowAddMenu(false)}
         onAddVision={handleAddVision}
         onAddHabit={handleAddHabit}
+      />
+
+      {/* Graduate Vision Confirmation Modal */}
+      <ConfirmationModal
+        visible={showGraduateVisionModal}
+        title="Graduate a vision to complete it forever"
+        message="You can not contribute to the vision anymore. However, you can still see logs of your vision."
+        confirmText="Graduate"
+        cancelText="Cancel"
+        onConfirm={confirmGraduateVision}
+        onCancel={() => {
+          setShowGraduateVisionModal(false);
+          setSelectedVision(null);
+        }}
+        destructive={false}
+      />
+
+      {/* Graduate Habit Confirmation Modal */}
+      <ConfirmationModal
+        visible={showGraduateHabitModal}
+        title="Graduate a habit to complete it forever"
+        message="You won't be able to work on the habit anymore. However, you can still see logs of that habit."
+        confirmText="Graduate"
+        cancelText="Cancel"
+        onConfirm={confirmGraduateHabit}
+        onCancel={() => {
+          setShowGraduateHabitModal(false);
+          setSelectedHabit(null);
+        }}
+        destructive={false}
       />
 
       {/* Delete Vision Confirmation Modal */}
@@ -716,5 +927,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     fontFamily: 'Inter',
+  },
+  menuButton: {
+    padding: 4,
+  },
+  menuContainer: {
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    padding: 8,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  menuItemText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+  },
+  deleteMenuItemText: {
+    color: '#C04B76',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#1C1C1C',
+    marginVertical: 4,
   },
 });

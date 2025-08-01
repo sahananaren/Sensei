@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { testFunction } from '@/hooks/test-import';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useVisions } from '@/hooks/useVisions';
 
 interface ProgressDotsProps {
   currentStep: number;
@@ -87,24 +88,25 @@ interface CongratsModalProps {
 }
 
 function CongratsModal({ visible, visionName, onClose }: CongratsModalProps) {
-  useEffect(() => {
-    if (visible) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, 5000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [visible, onClose]);
+  const handleClose = () => {
+    console.log('Congrats modal close button tapped');
+    onClose();
+  };
+
+  const handleOverlayPress = () => {
+    console.log('Congrats modal overlay tapped');
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalOverlay} onPress={handleOverlayPress}>
         <View style={styles.congratsContainer}>
           <TouchableOpacity
             style={styles.congratsCloseButton}
-            onPress={onClose}
+            onPress={handleClose}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <X size={20} color="#A7A7A7" />
           </TouchableOpacity>
@@ -113,6 +115,34 @@ function CongratsModal({ visible, visionName, onClose }: CongratsModalProps) {
             Congrats on creating your new vision '{visionName}'
           </Text>
         </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+interface LimitWarningModalProps {
+  visible: boolean;
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+}
+
+function LimitWarningModal({ visible, title, subtitle, onClose }: LimitWarningModalProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.modalOverlay}>
+        <View style={styles.limitModalContainer}>
+          <Text style={styles.limitModalTitle}>{title}</Text>
+          <Text style={styles.limitModalSubtitle}>{subtitle}</Text>
+          
+          <TouchableOpacity
+            style={styles.limitModalButton}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.limitModalButtonText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
@@ -120,9 +150,13 @@ function CongratsModal({ visible, visionName, onClose }: CongratsModalProps) {
 
 export default function CreateVisionScreen() {
   const { user } = useAuth();
+  const { visions } = useVisions();
+  const { subscription, showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   // Form data
@@ -130,6 +164,9 @@ export default function CreateVisionScreen() {
   const [visionDescription, setVisionDescription] = useState('');
   const [milestones, setMilestones] = useState<string[]>(['']);
   const [habits, setHabits] = useState<string[]>(['']);
+
+  // Check if user has reached the vision limit based on subscription
+  const hasReachedVisionLimit = visions.length >= subscription.maxVisions;
 
   const hasFormData = () => {
     return visionName.trim() !== '' || 
@@ -290,7 +327,19 @@ export default function CreateVisionScreen() {
       return;
     }
 
-    // Check if user needs to upgrade
+    // Check vision limit before creating
+    if (hasReachedVisionLimit) {
+      if (subscription.isPro) {
+        // Pro users get the focus limit modal
+        setShowLimitModal(true);
+      } else {
+        // Free users get the upgrade prompt
+        showUpgrade();
+      }
+      return;
+    }
+
+    // Check if user needs to upgrade (for free users trying to create second vision)
     if (checkUpgradeRequired()) {
       showUpgrade();
       return;
@@ -364,6 +413,12 @@ export default function CreateVisionScreen() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleCongratsClose = () => {
+    setShowCongratsModal(false);
+    // Navigate to today page instead of just going back
+    router.replace('/(tabs)');
   };
 
   const canProceedStep1 = visionName.trim() !== '' && visionDescription.trim() !== '';
@@ -489,8 +544,6 @@ export default function CreateVisionScreen() {
     }
   };
 
-  const { subscription, showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
-
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -519,39 +572,43 @@ export default function CreateVisionScreen() {
         {renderCurrentStep()}
       </ScrollView>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - Fixed alignment and padding */}
       <View style={styles.bottomNavigation}>
-        {currentStep > 1 && (
+        <View style={styles.bottomNavigationContent}>
+          {currentStep > 1 ? (
+            <TouchableOpacity
+              style={styles.previousButton}
+              onPress={handlePrevious}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={20} color="#A7A7A7" />
+              <Text style={styles.previousButtonText}>Previous</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.previousButtonPlaceholder} />
+          )}
+          
+          <View style={styles.progressContainer}>
+            <ProgressDots currentStep={currentStep} totalSteps={3} />
+          </View>
+          
           <TouchableOpacity
-            style={styles.previousButton}
-            onPress={handlePrevious}
+            style={[
+              styles.actionButton,
+              getActionButtonActive() ? styles.actionButtonActive : styles.actionButtonInactive
+            ]}
+            onPress={handleActionButton}
+            disabled={!getActionButtonActive()}
             activeOpacity={0.7}
           >
-            <ArrowLeft size={20} color="#A7A7A7" />
-            <Text style={styles.previousButtonText}>Previous</Text>
+            <Text style={[
+              styles.actionButtonText,
+              getActionButtonActive() ? styles.actionButtonTextActive : styles.actionButtonTextInactive
+            ]}>
+              {getActionButtonText()}
+            </Text>
           </TouchableOpacity>
-        )}
-        
-        <View style={styles.progressContainer}>
-          <ProgressDots currentStep={currentStep} totalSteps={3} />
         </View>
-        
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            getActionButtonActive() ? styles.actionButtonActive : styles.actionButtonInactive
-          ]}
-          onPress={handleActionButton}
-          disabled={!getActionButtonActive()}
-          activeOpacity={0.7}
-        >
-          <Text style={[
-            styles.actionButtonText,
-            getActionButtonActive() ? styles.actionButtonTextActive : styles.actionButtonTextInactive
-          ]}>
-            {getActionButtonText()}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Modals */}
@@ -564,7 +621,14 @@ export default function CreateVisionScreen() {
       <CongratsModal
         visible={showCongratsModal}
         visionName={visionName}
-        onClose={() => setShowCongratsModal(false)}
+        onClose={handleCongratsClose}
+      />
+      
+      <LimitWarningModal
+        visible={showLimitModal}
+        title="We recommend a maximum of 4 visions to maintain focus"
+        subtitle="Graduate or delete an existing vision to start a new one."
+        onClose={() => setShowLimitModal(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -643,17 +707,28 @@ const styles = StyleSheet.create({
   },
   bottomNavigation: {
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 40,
-    position: 'relative',
+    paddingTop: 24,
+    paddingBottom: 24, // Same padding as header
+  },
+  bottomNavigationContent: {
+    flexDirection: 'row',
+    alignItems: 'center', // Vertical center alignment
+    justifyContent: 'space-between',
+    height: 48, // Fixed height for consistent alignment
+  },
+  previousButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 80, // Ensure consistent width
+  },
+  previousButtonPlaceholder: {
+    minWidth: 80, // Same width as previous button for balance
   },
   progressContainer: {
-    position: 'absolute',
-    top: 20,
-    left: '50%',
-    transform: [{ translateX: -20 }],
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
   },
   progressDot: {
     width: 8,
@@ -666,14 +741,6 @@ const styles = StyleSheet.create({
   progressDotInactive: {
     backgroundColor: '#333333',
   },
-  previousButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   previousButtonText: {
     fontSize: 15,
     fontWeight: '500',
@@ -681,9 +748,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
   },
   actionButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -782,8 +846,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
-    width: 32,
-    height: 32,
+    width: 40, // Increased from 32
+    height: 40, // Increased from 32
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -795,5 +859,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     paddingRight: 32,
+  },
+  limitModalContainer: {
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  limitModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  limitModalSubtitle: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  limitModalButton: {
+    backgroundColor: '#329BA4',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  limitModalButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
   },
 });

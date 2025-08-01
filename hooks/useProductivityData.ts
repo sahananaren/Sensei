@@ -1,25 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-
-export interface ProductivitySession {
-  id: string;
-  habit_id: string;
-  vision_id: string;
-  duration_minutes: number;
-  accomplishment: string;
-  completed_at: string;
-  habit: {
-    id: string;
-    name: string;
-    vision_id: string;
-  };
-  vision: {
-    id: string;
-    name: string;
-    color: string;
-  };
-}
 
 export interface VisionRanking {
   id: string;
@@ -32,20 +13,22 @@ export interface VisionRanking {
 export interface WeeklyData {
   date: string;
   dayName: string;
-  sessions: ProductivitySession[];
+  sessions: any[];
   totalMinutes: number;
   visionData: { [visionId: string]: { minutes: number; name: string; color: string } };
 }
 
 export function useProductivityData() {
   const { user } = useAuth();
-  const [sessions, setSessions] = useState<ProductivitySession[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [visions, setVisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProductivityData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) {
       setSessions([]);
+      setVisions([]);
       setLoading(false);
       return;
     }
@@ -54,30 +37,44 @@ export function useProductivityData() {
       setLoading(true);
       setError(null);
 
-      const { data, error: sessionsError } = await supabase
+      // Fetch all sessions for the user
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from('focus_sessions')
         .select(`
           *,
-          habit:habits(id, name, vision_id),
-          vision:visions(id, name, color)
+          vision:visions(id, name, color, status),
+          habit:habits(id, name, status)
         `)
         .eq('user_id', user.id)
         .order('completed_at', { ascending: false });
 
       if (sessionsError) throw sessionsError;
 
-      setSessions(data || []);
+      // Fetch all visions (active and graduated) for the user
+      const { data: visionsData, error: visionsError } = await supabase
+        .from('visions')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['active', 'graduated']) // Include both active and graduated visions
+        .order('status', { ascending: true }) // Active first, then graduated
+        .order('graduated_at', { ascending: false }) // Most recently graduated first
+        .order('created_at', { ascending: true });
+
+      if (visionsError) throw visionsError;
+
+      setSessions(sessionsData || []);
+      setVisions(visionsData || []);
     } catch (err) {
       console.error('Error fetching productivity data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch productivity data');
+      setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchProductivityData();
-  }, [user]);
+    fetchData();
+  }, [fetchData]);
 
   const calculateStats = () => {
     if (!sessions.length) {
@@ -125,44 +122,45 @@ export function useProductivityData() {
     };
   };
 
-  const getVisionRankings = (): VisionRanking[] => {
-    if (!sessions.length) return [];
+  // Calculate vision rankings based on active days
+  const calculateVisionRankings = useCallback(() => {
+    const visionStats = new Map<string, { name: string; color: string; activeDays: number }>();
 
-    // Group sessions by vision and calculate active days
-    const visionStats = new Map<string, { vision: any; activeDays: Set<string> }>();
-
+    // Count active days for each vision
     sessions.forEach(session => {
-      const visionId = session.vision.id;
-      const dayString = new Date(session.completed_at).toDateString();
-
-      if (!visionStats.has(visionId)) {
-        visionStats.set(visionId, {
-          vision: session.vision,
-          activeDays: new Set(),
-        });
+      if (session.vision && session.vision.status !== 'deleted') {
+        const visionId = session.vision.id;
+        const date = new Date(session.completed_at).toDateString();
+        
+        if (!visionStats.has(visionId)) {
+          visionStats.set(visionId, {
+            name: session.vision.name,
+            color: session.vision.color,
+            activeDays: 0
+          });
+        }
+        
+        const stats = visionStats.get(visionId)!;
+        if (!stats.activeDays || !stats.activeDays.toString().includes(date)) {
+          stats.activeDays++;
+        }
       }
-
-      visionStats.get(visionId)!.activeDays.add(dayString);
     });
 
-    // Convert to rankings
-    const rankings = Array.from(visionStats.entries())
-      .map(([visionId, stats]) => ({
-        id: visionId,
-        name: stats.vision.name,
-        color: stats.vision.color,
-        activeDays: stats.activeDays.size,
-        rank: 0, // Will be set below
+    // Convert to array and sort by active days
+    const rankings: VisionRanking[] = Array.from(visionStats.entries())
+      .map(([id, stats], index) => ({
+        id,
+        name: stats.name,
+        color: stats.color,
+        activeDays: stats.activeDays,
+        rank: index + 1
       }))
-      .sort((a, b) => b.activeDays - a.activeDays);
-
-    // Assign ranks
-    rankings.forEach((vision, index) => {
-      vision.rank = index + 1;
-    });
+      .sort((a, b) => b.activeDays - a.activeDays)
+      .map((vision, index) => ({ ...vision, rank: index + 1 }));
 
     return rankings;
-  };
+  }, [sessions]);
 
   const getWeeklyData = (weekOffset: number = 0): WeeklyData[] => {
     const now = new Date();
@@ -210,24 +208,25 @@ export function useProductivityData() {
     return weekData;
   };
 
-  const getSessionsForDate = (date: string): ProductivitySession[] => {
+  const getSessionsForDate = (date: string): any[] => {
     const targetDate = new Date(date).toDateString();
     return sessions.filter(session => 
       new Date(session.completed_at).toDateString() === targetDate
     );
   };
 
-  const refetch = () => {
-    fetchProductivityData();
-  };
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
 
   return {
     sessions,
+    visions,
+    visionRankings: calculateVisionRankings(),
     loading,
     error,
     refetch,
     calculateStats,
-    getVisionRankings,
     getWeeklyData,
     getSessionsForDate,
   };
