@@ -16,8 +16,8 @@ expo-env.d.ts
 *.mobileprovision
 
 # native folders (for CNG/Prebuild)
-/android
-/ios
+# /android
+# /ios
 
 # metro
 .metro-health-check*
