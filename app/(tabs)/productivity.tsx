@@ -403,7 +403,7 @@ export default function ProductivityTab() {
     loading, 
     error, 
     calculateStats, 
-    getVisionRankings, 
+    visionRankings, 
     getWeeklyData
   } = useProductivityData();
   
@@ -455,7 +455,6 @@ export default function ProductivityTab() {
   }
 
   const stats = calculateStats();
-  const visionRankings = getVisionRankings();
   const weekData = getWeeklyData(weekOffset);
   
   // Get unique visions for Wall of Fame filter
