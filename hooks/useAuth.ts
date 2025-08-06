@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -17,6 +19,10 @@ export function useAuth() {
       try {
         console.log('🔐 useAuth: Checking for existing session...');
         setLoading(true);
+        
+        // Check what's in AsyncStorage
+        const storedSession = await AsyncStorage.getItem('supabase.auth.token');
+        console.log('🔐 AsyncStorage session:', storedSession ? 'Found' : 'Not found');
         
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -79,6 +85,34 @@ export function useAuth() {
       isMounted = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const refreshSession = async () => {
+      try {
+        // First check if we have a current session
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (!currentSession) {
+          console.log('🔐 useAuth: No session to refresh, skipping...');
+          return;
+        }
+
+        // Only refresh if we have a valid session
+        const { data, error } = await supabase.auth.refreshSession();
+        if (error) {
+          console.error('🔐 useAuth: Session refresh failed:', error);
+        } else {
+          console.log('🔐 useAuth: Session refreshed successfully');
+        }
+      } catch (error) {
+        console.error('🔐 useAuth: Session refresh error:', error);
+      }
+    };
+
+    // Refresh session when app becomes active
+    const interval = setInterval(refreshSession, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const signIn = async (email: string, password: string) => {

@@ -355,29 +355,32 @@ export default function TodayTab() {
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Show upgrade on first visit
-  useEffect(() => {
-    const checkFirstVisit = async () => {
-      const hasVisited = await AsyncStorage.getItem('has_visited_before');
-      if (!hasVisited) {
-        await AsyncStorage.setItem('has_visited_before', 'true');
-        // Show upgrade after a short delay
-        setTimeout(() => {
-          showUpgrade();
-        }, 2000);
-      }
-    };
-    
-    checkFirstVisit();
-  }, []);
-
   // Refetch visions when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log('📱 TodayTab: Screen focused, refetching visions...');
-      refetch();
-    }, [refetch])
+      // Only refetch if we don't have any visions data
+      if (visions.length === 0) {
+        console.log('📱 TodayTab: Screen focused, refetching visions...');
+        refetch();
+      }
+    }, [refetch, visions.length])
   );
+
+  // COMMENTED OUT: Check for first-time user upgrade popup
+  // useEffect(() => {
+  //   const checkFirstTimeUser = async () => {
+  //     const shouldShowUpgrade = await AsyncStorage.getItem('show_upgrade_on_first_visit');
+  //     if (shouldShowUpgrade === 'true') {
+  //       await AsyncStorage.removeItem('show_upgrade_on_first_visit');
+  //       // Show upgrade after a short delay
+  //       setTimeout(() => {
+  //         showUpgrade();
+  //       }, 2000);
+  //     }
+  //   };
+    
+  //   checkFirstTimeUser();
+  // }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -391,10 +394,11 @@ export default function TodayTab() {
   };
 
   const handleAddVision = () => {
-    if (checkUpgradeRequired()) {
-      showUpgrade();
-      return;
-    }
+    // COMMENTED OUT: Upgrade check when creating vision
+    // if (checkUpgradeRequired()) {
+    //   showUpgrade();
+    //   return;
+    // }
     router.push('/create-vision');
   };
 

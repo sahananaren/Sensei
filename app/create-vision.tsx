@@ -165,8 +165,11 @@ export default function CreateVisionScreen() {
   const [milestones, setMilestones] = useState<string[]>(['']);
   const [habits, setHabits] = useState<string[]>(['']);
 
-  // Check if user has reached the vision limit based on subscription
-  const hasReachedVisionLimit = visions.length >= subscription.maxVisions;
+  // COMMENTED OUT: Use the real vision count from subscription instead of visions.length
+  // const hasReachedVisionLimit = subscription.visionCount >= subscription.maxVisions;
+  
+  // TEMPORARILY REMOVED: No vision limits
+  const hasReachedVisionLimit = false;
 
   const hasFormData = () => {
     return visionName.trim() !== '' || 

@@ -4,12 +4,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Platform } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useAuth } from '@/hooks/useAuth';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useNotifications } from '@/hooks/useNotifications';
 import { SubscriptionProvider, useSubscription } from '@/hooks/useSubscription';
 import UpgradeScreen from './upgrade';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete
 SplashScreen.preventAutoHideAsync();
@@ -28,6 +30,19 @@ function RootLayoutContent() {
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold': Inter_700Bold,
   });
+
+  // Initialize RevenueCat for Android
+  useEffect(() => {
+    console.log('🔧 Initializing RevenueCat...');
+    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+    
+    try {
+      Purchases.configure({ apiKey: 'goog_pGtDkPXiOdPfnqPsbzvSMLmqVAo' });
+      console.log('✅ RevenueCat configured successfully for Android');
+    } catch (error) {
+      console.error('❌ CRITICAL: RevenueCat initialization failed:', error);
+    }
+  }, []);
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {

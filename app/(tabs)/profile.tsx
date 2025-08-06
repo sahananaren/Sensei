@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useSubscription } from '@/hooks/useSubscription';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Purchases, { PurchasesOffering, PurchasesPackage, CustomerInfo } from 'react-native-purchases';
 
 interface EditableFieldProps {
   label: string;
@@ -266,7 +267,7 @@ export default function ProfileTab() {
   const { user, signOut } = useAuth();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const { subscription, showUpgrade } = useSubscription();
+  const { subscription, showUpgrade, cancelSubscription } = useSubscription();
   
   // Mock plan type - in real app this would come from user data
   const planType: 'free' | 'trial' | 'pro' = 'free';
@@ -314,18 +315,15 @@ export default function ProfileTab() {
   };
 
   const handleUpgrade = () => {
-    Alert.alert(
-      'Upgrade to Pro',
-      'Get unlimited visions and productivity analytics for $4/month or $40/year.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Start Trial', onPress: () => Alert.alert('Coming Soon', 'Upgrade functionality will be available soon') }
-      ]
-    );
+    // COMMENTED OUT: Upgrade functionality
+    // showUpgrade();
+    console.log('Upgrade functionality temporarily disabled');
   };
 
-  const handleManagePlan = () => {
-    Alert.alert('Manage Plan', 'Plan management will be available soon');
+  const handleManagePlan = async () => {
+    // COMMENTED OUT: Manage plan functionality
+    // await handleManagePlan();
+    console.log('Manage plan functionality temporarily disabled');
   };
 
   const handleLogOut = () => {
@@ -440,8 +438,8 @@ export default function ProfileTab() {
           />
         </View>
 
-        {/* Plan Status */}
-        <View style={styles.section}>
+        {/* COMMENTED OUT: Plan Status */}
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Plan Status</Text>
           <View style={styles.subscriptionCard}>
             <View style={styles.subscriptionInfo}>
@@ -462,7 +460,7 @@ export default function ProfileTab() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </View> */}
 
         {/* Actions */}
         <View style={styles.section}>

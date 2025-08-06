@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,20 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Image,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
+import { useSubscription } from '@/hooks/useSubscription';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
   const { signInWithGoogle, loading: googleLoading } = useGoogleAuth();
+  const { showUpgrade } = useSubscription();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -65,6 +70,11 @@ export default function AuthScreen() {
       if (result.error) {
         Alert.alert('Error', result.error.message);
       } else {
+        // COMMENTED OUT: For new signups, show upgrade popup after navigation
+        // if (isSignUp) {
+        //   // Set a flag to show upgrade popup after navigation
+        //   await AsyncStorage.setItem('show_upgrade_on_first_visit', 'true');
+        // }
         // Navigation will be handled by the auth state change
         router.replace('/(tabs)');
       }
@@ -82,6 +92,8 @@ export default function AuthScreen() {
       if (error) {
         Alert.alert('Error', error instanceof Error ? error.message : 'Google sign-in failed');
       } else {
+        // COMMENTED OUT: For new Google signups, show upgrade popup after navigation
+        // await AsyncStorage.setItem('show_upgrade_on_first_visit', 'true');
         // Navigation will be handled by the auth state change
         router.replace('/(tabs)');
       }
@@ -105,88 +117,73 @@ export default function AuthScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
+      <KeyboardAvoidingView 
+        style={styles.keyboardContainer} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {isSignUp 
-              ? 'Start your mastery journey today' 
-              : 'Sign in to continue your progress'
-            }
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
-              style={styles.textInput}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              placeholderTextColor="#666666"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor="#666666"
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.logoHeader}>
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('../assets/images/favicon.png')} 
+                style={styles.logo}
+                resizeMode="contain"
               />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-              >
-                {showPassword ? (
-                  <EyeOff size={20} color="#A7A7A7" />
-                ) : (
-                  <Eye size={20} color="#A7A7A7" />
-                )}
-              </TouchableOpacity>
+              <Text style={styles.logoText}>Sensei</Text>
             </View>
           </View>
 
-          {isSignUp && (
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              {isSignUp ? 'Create Account' : 'Welcome Back'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isSignUp 
+                ? 'Start your mastery journey today' 
+                : 'Sign in to continue your progress'
+              }
+            </Text>
+          </View>
+
+          <View style={styles.form}>
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Confirm Password</Text>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.textInput}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Enter your email"
+                placeholderTextColor="#666666"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Password</Text>
               <View style={styles.passwordContainer}>
                 <TextInput
                   style={styles.passwordInput}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
                   placeholderTextColor="#666666"
-                  secureTextEntry={!showConfirmPassword}
+                  secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onPress={() => setShowPassword(!showPassword)}
                   activeOpacity={0.7}
                 >
-                  {showConfirmPassword ? (
+                  {showPassword ? (
                     <EyeOff size={20} color="#A7A7A7" />
                   ) : (
                     <Eye size={20} color="#A7A7A7" />
@@ -194,49 +191,78 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          )}
 
-          <TouchableOpacity
-            style={[
-              styles.authButton,
-              isFormValid() && !loading ? styles.authButtonActive : styles.authButtonInactive
-            ]}
-            onPress={handleAuth}
-            disabled={!isFormValid() || loading}
-            activeOpacity={0.8}
-          >
-            <Text style={[
-              styles.authButtonText,
-              isFormValid() && !loading ? styles.authButtonTextActive : styles.authButtonTextInactive
-            ]}>
-              {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
-            </Text>
-          </TouchableOpacity>
+            {isSignUp && (
+              <View style={styles.fieldContainer}>
+                <Text style={styles.fieldLabel}>Confirm Password</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm your password"
+                    placeholderTextColor="#666666"
+                    secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    activeOpacity={0.7}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={20} color="#A7A7A7" />
+                    ) : (
+                      <Eye size={20} color="#A7A7A7" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={handleGoogleSignIn}
-            disabled={googleLoading}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.googleButtonText}>
-              {googleLoading ? 'Signing in...' : 'Continue with Google'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[
+                styles.authButton,
+                isFormValid() && !loading ? styles.authButtonActive : styles.authButtonInactive
+              ]}
+              onPress={handleAuth}
+              disabled={!isFormValid() || loading}
+              activeOpacity={0.8}
+            >
+              <Text style={[
+                styles.authButtonText,
+                isFormValid() && !loading ? styles.authButtonTextActive : styles.authButtonTextInactive
+              ]}>
+                {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
+              </Text>
+            </TouchableOpacity>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-          </Text>
-          <TouchableOpacity onPress={toggleAuthMode} activeOpacity={0.7}>
-            <Text style={styles.footerLink}>
-              {isSignUp ? 'Sign In' : 'Sign Up'}
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={googleLoading}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.googleButtonText}>
+                {googleLoading ? 'Signing in...' : 'Continue with Google'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              {isSignUp ? 'Already have an account?' : "Don't have an account?"}
             </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity onPress={toggleAuthMode} activeOpacity={0.7}>
+              <Text style={styles.footerLink}>
+                {isSignUp ? 'Sign In' : 'Sign Up'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -245,11 +271,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0A0A0A',
   },
+  keyboardContainer: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 100,
     paddingBottom: 40,
+    minHeight: '100%',
+  },
+  logoHeader: {
+    paddingBottom: 80,
+    alignItems: 'flex-start',
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logo: {
+    width: 24,
+    height: 24,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Playfair Display',
   },
   header: {
     marginBottom: 40,
@@ -258,14 +307,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'Inter',
+    fontFamily: 'Playfair Display',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
     color: '#A7A7A7',
-    fontFamily: 'Inter',
+    fontFamily: 'Playfair Display',
   },
   form: {
     flex: 1,
@@ -353,7 +402,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 24,
+    marginBottom: 24,
     gap: 8,
   },
   footerText: {

@@ -1,17 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
-interface SubscriptionOption {
-  id: string;
-  title: string;
-  duration: string;
-  price: string;
-  monthlyPrice: string;
-  discount?: string;
-  savings?: string;
-}
+import { useSubscription } from '@/hooks/useSubscription';
+import { SubscriptionPlan } from '@/lib/revenueCat';
 
 interface UpgradeScreenProps {
   visible: boolean;
@@ -20,36 +12,47 @@ interface UpgradeScreenProps {
 }
 
 export default function UpgradeScreen({ visible, onClose, onSelectPlan }: UpgradeScreenProps) {
-  const [selectedPlan, setSelectedPlan] = useState<string>('yearly');
+  const { subscriptionPlans, loading, restorePurchases } = useSubscription();
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
 
-  // Dummy subscription data (will come from RevenueCat)
-  const subscriptionOptions: SubscriptionOption[] = [
-    {
-      id: 'monthly',
-      title: 'Monthly',
-      duration: '1 mo',
-      price: '$9.99',
-      monthlyPrice: '$9.99/mo',
-    },
-    {
-      id: 'yearly',
-      title: 'Annual',
-      duration: '12 mo',
-      price: '$69.99',
-      monthlyPrice: '$5.83/mo',
-      discount: '19% OFF',
-      savings: '2 months free',
-    },
-  ];
+  // Set default selection when plans load
+  React.useEffect(() => {
+    if (subscriptionPlans.length > 0 && !selectedPlan) {
+      // Default to yearly if available, otherwise monthly
+      const yearlyPlan = subscriptionPlans.find(plan => plan.title === 'Annual');
+      const monthlyPlan = subscriptionPlans.find(plan => plan.title === 'Monthly');
+      setSelectedPlan(yearlyPlan?.id || monthlyPlan?.id || subscriptionPlans[0].id);
+    }
+  }, [subscriptionPlans]);
 
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
   };
 
   const handleContinue = () => {
-    onSelectPlan(selectedPlan);
-    onClose();
+    if (selectedPlan) {
+      onSelectPlan(selectedPlan);
+    }
   };
+
+  const handleRestorePurchases = async () => {
+    try {
+      await restorePurchases();
+    } catch (error) {
+      console.error('Error restoring purchases:', error);
+    }
+  };
+
+  if (loading && subscriptionPlans.length === 0) {
+    return (
+      <Modal visible={visible} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#329BA4" />
+          <Text style={styles.loadingText}>Loading subscription options...</Text>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -69,7 +72,7 @@ export default function UpgradeScreen({ visible, onClose, onSelectPlan }: Upgrad
 
             {/* Subscription Options */}
             <View style={styles.optionsContainer}>
-              {subscriptionOptions.map((option) => (
+              {subscriptionPlans.map((option) => (
                 <TouchableOpacity
                   key={option.id}
                   style={[
@@ -116,12 +119,20 @@ export default function UpgradeScreen({ visible, onClose, onSelectPlan }: Upgrad
             </View>
 
             {/* Continue Button */}
-            <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-              <Text style={styles.continueButtonText}>Continue</Text>
+            <TouchableOpacity 
+              style={[styles.continueButton, !selectedPlan && styles.continueButtonDisabled]} 
+              onPress={handleContinue}
+              disabled={!selectedPlan || loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.continueButtonText}>Continue</Text>
+              )}
             </TouchableOpacity>
 
             {/* Restore Purchases */}
-            <TouchableOpacity style={styles.restoreButton}>
+            <TouchableOpacity style={styles.restoreButton} onPress={handleRestorePurchases}>
               <Text style={styles.restoreButtonText}>Restore purchases</Text>
             </TouchableOpacity>
           </View>
@@ -139,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    backgroundColor: '#111111', // Card Background
+    backgroundColor: '#111111',
     borderRadius: 16,
     width: Dimensions.get('window').width - 40,
     maxHeight: Dimensions.get('window').height * 0.8,
@@ -158,7 +169,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF', // Font Primary
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 8,
     fontFamily: 'Inter-Bold',
@@ -166,7 +177,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#A7A7A7', // Font Secondary
+    color: '#A7A7A7',
     textAlign: 'center',
     marginBottom: 32,
     fontFamily: 'Inter-Regular',
@@ -181,13 +192,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1C1C1C', // Darker border for card background
-    backgroundColor: '#0A0A0A', // App background for contrast
+    borderColor: '#1C1C1C',
+    backgroundColor: '#0A0A0A',
     position: 'relative',
   },
   selectedOption: {
     borderColor: '#329BA4',
-    backgroundColor: '#0A0A0A', // Keep app background for selected state
+    backgroundColor: '#0A0A0A',
   },
   selectionIndicator: {
     marginRight: 12,
@@ -206,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1C1C1C',
-    backgroundColor: '#111111', // Card background
+    backgroundColor: '#111111',
   },
   optionContent: {
     flex: 1,
@@ -219,7 +230,7 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF', // Font Primary
+    color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
   },
   discountTag: {
@@ -232,13 +243,13 @@ const styles = StyleSheet.create({
   discountText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF', // Font Primary
+    color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
   },
   optionDuration: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#A7A7A7', // Font Secondary
+    color: '#A7A7A7',
     fontFamily: 'Inter-Regular',
   },
   priceContainer: {
@@ -247,13 +258,13 @@ const styles = StyleSheet.create({
   monthlyPrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF', // Font Primary
+    color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
   },
   savingsText: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#329BA4', // Accent color
+    color: '#329BA4',
     marginTop: 2,
     fontFamily: 'Inter-Regular',
   },
@@ -264,10 +275,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  continueButtonDisabled: {
+    backgroundColor: '#333333',
+  },
   continueButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF', // Font Primary
+    color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
   },
   restoreButton: {
@@ -276,7 +290,18 @@ const styles = StyleSheet.create({
   restoreButtonText: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#A7A7A7', // Font Secondary
+    color: '#A7A7A7',
     fontFamily: 'Inter-Regular',
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    marginTop: 16,
+    fontSize: 16,
   },
 }); 
