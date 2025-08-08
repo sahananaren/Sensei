@@ -55,13 +55,14 @@
       owner: "sahananarenx",
       android: {
         package: "com.sahananarenx.Sensei",
-        versionCode: 17, // This will be used by prebuild
+        versionCode: 22, // This will be used by prebuild
         permissions: [
           "NOTIFICATIONS",
           "VIBRATE",
           "RECEIVE_BOOT_COMPLETED",
           "com.android.vending.BILLING"
         ],
+        // Add back intent filters for OAuth callback
         intentFilters: [
           {
             action: "VIEW",

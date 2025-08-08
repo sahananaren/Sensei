@@ -86,11 +86,11 @@ export default function AuthScreen() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleAuth = async () => {
     try {
-      const { error } = await signInWithGoogle();
+      const { error } = await signInWithGoogle(isSignUp);
       if (error) {
-        Alert.alert('Error', error instanceof Error ? error.message : 'Google sign-in failed');
+        Alert.alert('Error', error instanceof Error ? error.message : 'Google authentication failed');
       } else {
         // COMMENTED OUT: For new Google signups, show upgrade popup after navigation
         // await AsyncStorage.setItem('show_upgrade_on_first_visit', 'true');
@@ -98,7 +98,7 @@ export default function AuthScreen() {
         router.replace('/(tabs)');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred during Google sign-in');
+      Alert.alert('Error', 'An unexpected error occurred during Google authentication');
       console.error('Google auth error:', error);
     }
   };
@@ -240,12 +240,12 @@ export default function AuthScreen() {
 
             <TouchableOpacity
               style={styles.googleButton}
-              onPress={handleGoogleSignIn}
+              onPress={handleGoogleAuth}
               disabled={googleLoading}
               activeOpacity={0.8}
             >
               <Text style={styles.googleButtonText}>
-                {googleLoading ? 'Signing in...' : 'Continue with Google'}
+                {googleLoading ? 'Signing in...' : `Continue with Google`}
               </Text>
             </TouchableOpacity>
           </View>

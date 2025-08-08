@@ -5,39 +5,42 @@ import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_CLIENT_ID = '1047534752221-2hr66p40mr0u0q152sbgvmp4cc2pvlnp.apps.googleusercontent.com';
+// Updated to use web client ID
+const GOOGLE_CLIENT_ID = '1047534752221-5c58pk3hnm3g9ufms4tr8q4e5303bjj7.apps.googleusercontent.com';
 
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (isSignUp: boolean = false) => {
     try {
       setLoading(true);
       console.log('🔐 Google Auth: Starting sign-in...');
       
-      // Create discovery document
+      // Create discovery document for Google OAuth
       const discovery = {
         authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
         tokenEndpoint: 'https://oauth2.googleapis.com/token',
       };
+      
+      // Use WEB redirect URI for web client
+      const redirectUri = 'https://auth.expo.io/@sahananarenx/Sensei';
 
-      // Use EXPLICIT redirect URI instead of makeRedirectUri
-      const redirectUri = 'com.sahananarenx.Sensei://auth/callback';
-
-      // Create auth request
+      // Create auth request with custom app name
       const request = new AuthSession.AuthRequest({
         clientId: GOOGLE_CLIENT_ID,
         scopes: ['openid', 'profile', 'email'],
-        redirectUri: redirectUri, // Use explicit URI
+        redirectUri: redirectUri,
         responseType: AuthSession.ResponseType.Code,
         extraParams: {
           access_type: 'offline',
+          // Add custom app name to replace "Expo.io"
+          app_name: 'Sensei',
         },
       });
 
       console.log('🔐 Google Auth: Redirect URI:', redirectUri);
 
-      // Start auth session
+      // Start auth session with discovery
       const result = await request.promptAsync(discovery);
 
       console.log('🔐 Google Auth: Result:', result);
@@ -45,12 +48,12 @@ export function useGoogleAuth() {
       if (result.type === 'success') {
         console.log('🔐 Google Auth: Success, exchanging code...');
         
-        // Exchange code for tokens
+        // Exchange code for tokens with discovery
         const tokenResponse = await AuthSession.exchangeCodeAsync(
           {
             clientId: GOOGLE_CLIENT_ID,
             code: result.params.code,
-            redirectUri: redirectUri, // Use explicit URI
+            redirectUri: redirectUri,
           },
           discovery
         );
