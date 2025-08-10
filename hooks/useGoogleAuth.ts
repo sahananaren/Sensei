@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import * as AuthSession from 'expo-auth-session';
+
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_CLIENT_ID = '1047534752221-2hr66p40mr0u0q152sbgvmp4cc2pvlnp.apps.googleusercontent.com';
 
 export function useGoogleAuth() {
   const [loading, setLoading] = useState(false);
@@ -13,66 +11,98 @@ export function useGoogleAuth() {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      console.log('🔐 Google Auth: Starting sign-in...');
+      console.log('🔐 Google Auth: Starting Supabase OAuth...');
       
-      // Create discovery document
-      const discovery = {
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-      };
-
-      // Use EXPLICIT redirect URI instead of makeRedirectUri
-      const redirectUri = 'com.sahananarenx.Sensei://auth/callback';
-
-      // Create auth request
-      const request = new AuthSession.AuthRequest({
-        clientId: GOOGLE_CLIENT_ID,
-        scopes: ['openid', 'profile', 'email'],
-        redirectUri: redirectUri, // Use explicit URI
-        responseType: AuthSession.ResponseType.Code,
-        extraParams: {
-          access_type: 'offline',
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'com.sahananarenx.Sensei://auth/callback',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
 
-      console.log('🔐 Google Auth: Redirect URI:', redirectUri);
+      console.log(' Google Auth: OAuth response:', { data, error });
 
-      // Start auth session
-      const result = await request.promptAsync(discovery);
+      if (error) {
+        console.error('❌ Supabase OAuth error:', error);
+        throw error;
+      }
 
-      console.log('🔐 Google Auth: Result:', result);
+      if (!data?.url) {
+        console.error('❌ No OAuth URL returned from Supabase');
+        throw new Error('No OAuth URL returned from Supabase');
+      }
 
-      if (result.type === 'success') {
-        console.log('🔐 Google Auth: Success, exchanging code...');
+      console.log('🔐 Google Auth: Opening OAuth URL:', data.url);
+      
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url, 
+        'com.sahananarenx.Sensei://auth/callback'
+      );
+      
+      console.log('🔐 Google Auth: Browser result:', result);
+
+      if (result.type === 'success' && result.url) {
+        console.log('✅ Google Auth: OAuth completed successfully');
+        console.log('🔐 Google Auth: Result URL:', result.url);
         
-        // Exchange code for tokens
-        const tokenResponse = await AuthSession.exchangeCodeAsync(
-          {
-            clientId: GOOGLE_CLIENT_ID,
-            code: result.params.code,
-            redirectUri: redirectUri, // Use explicit URI
-          },
-          discovery
-        );
-
-        console.log(' Google Auth: Token response received');
-
-        // Use ID token for Supabase
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: tokenResponse.idToken!,
-        });
-
-        if (error) {
-          console.error('❌ Supabase error:', error);
-          throw error;
+        // Parse tokens from the callback URL
+        if (result.url.includes('#access_token=')) {
+          const fragment = result.url.split('#')[1];
+          const params = new URLSearchParams(fragment);
+          
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          
+          console.log('🔐 Google Auth: Parsed tokens:', {
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken
+          });
+          
+          if (accessToken && refreshToken) {
+            // Set the session manually using the tokens
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            
+            console.log('🔐 Google Auth: Set session result:', {
+              hasSession: !!sessionData.session,
+              error: sessionError,
+              user: sessionData.session?.user?.email
+            });
+            
+            if (sessionError) {
+              console.error('🔐 Google Auth: Error setting session:', sessionError);
+              return { data: null, error: sessionError };
+            }
+            
+            if (sessionData.session) {
+              console.log('✅ Google Auth: Session established successfully');
+              return { data: result, error: null };
+            }
+          }
         }
-
-        console.log('✅ Google Auth: Successfully signed in to Supabase');
-        return { data, error: null };
+        
+        // Fallback: try to get session normally
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        
+        console.log('🔐 Google Auth: Fallback session check:', { 
+          hasSession: !!sessionData.session, 
+          sessionError,
+          user: sessionData.session?.user?.email 
+        });
+        
+        return { data: result, error: sessionError };
+      } else if (result.type === 'cancel') {
+        console.log('❌ Google Auth: User cancelled OAuth');
+        return { data: null, error: new Error('OAuth was cancelled') };
       } else {
-        console.log('❌ Google Auth: User cancelled or failed');
-        return { data: null, error: new Error('Google sign-in was cancelled') };
+        console.log('❌ Google Auth: OAuth failed');
+        return { data: null, error: new Error('OAuth failed') };
       }
     } catch (error) {
       console.error('❌ Google Auth Error:', error);

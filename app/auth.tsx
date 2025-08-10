@@ -88,18 +88,20 @@ export default function AuthScreen() {
 
   const handleGoogleSignIn = async () => {
     try {
-      const { error } = await signInWithGoogle();
+      console.log('🔐 Auth Screen: Starting Google sign-in...');
+      const { data, error } = await signInWithGoogle();
+      
       if (error) {
+        console.error('🔐 Auth Screen: Google sign-in error:', error);
         Alert.alert('Error', error instanceof Error ? error.message : 'Google sign-in failed');
-      } else {
-        // COMMENTED OUT: For new Google signups, show upgrade popup after navigation
-        // await AsyncStorage.setItem('show_upgrade_on_first_visit', 'true');
-        // Navigation will be handled by the auth state change
-        router.replace('/(tabs)');
+        return;
       }
+      
+      console.log('✅ Auth Screen: Google sign-in completed successfully');
+      // The auth state change will handle navigation automatically
     } catch (error) {
+      console.error('🔐 Auth Screen: Unexpected error during Google sign-in:', error);
       Alert.alert('Error', 'An unexpected error occurred during Google sign-in');
-      console.error('Google auth error:', error);
     }
   };
 

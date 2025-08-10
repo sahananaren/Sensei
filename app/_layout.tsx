@@ -104,6 +104,7 @@ function RootLayoutContent() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="auth" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="create-vision" options={{ headerShown: false }} />
         <Stack.Screen name="create-habit" options={{ headerShown: false }} />
