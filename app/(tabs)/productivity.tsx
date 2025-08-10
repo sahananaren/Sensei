@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -9,8 +10,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { ChevronLeft, ChevronRight, ArrowRight, Calendar } from 'lucide-react-native';
-import { ChevronDown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ArrowRight, Calendar, ChevronDown, Target } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useProductivityData, VisionRanking } from '@/hooks/useProductivityData';
 import { ProductivityChart } from '@/components/ProductivityChart';
@@ -397,11 +397,33 @@ function WallOfFame({ sessions, selectedVisionId, uniqueVisions, onSelectVision 
   );
 }
 
+function EmptyState({ onCreateVision }: { onCreateVision: () => void }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyStateContent}>
+        <Target size={48} color="#A7A7A7" strokeWidth={1.5} />
+        <Text style={styles.emptyStateTitle}>No visions yet</Text>
+        <Text style={styles.emptyStateSubtitle}>
+          Create your first vision to start tracking habits and building momentum
+        </Text>
+        <TouchableOpacity 
+          style={styles.createVisionButton} 
+          onPress={onCreateVision}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.createVisionButtonText}>Create your First Vision</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function ProductivityTab() {
   const { 
     sessions, 
     loading, 
     error, 
+    refetch,
     calculateStats, 
     visionRankings, 
     getWeeklyData
@@ -410,6 +432,13 @@ export default function ProductivityTab() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedWallOfFameVisionId, setSelectedWallOfFameVisionId] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+  
+  // Refetch data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
   
   const handleCalendarDateSelect = (date: Date) => {
     // Calculate week offset for the selected date
@@ -482,6 +511,21 @@ export default function ProductivityTab() {
     // Navigate to mastery tab and select this vision
     router.push('/(tabs)/mastery');
   };
+
+  const handleCreateVision = () => {
+    router.push('/create-vision');
+  };
+
+  // Check if there are no visions (no sessions means no visions)
+  if (!loading && !error && sessions.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyStateContainer}>
+          <EmptyState onCreateVision={handleCreateVision} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -936,5 +980,48 @@ const styles = StyleSheet.create({
   filterOptionTextActive: {
     color: '#329BA4',
     fontWeight: '500',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateContent: {
+    alignItems: 'center',
+    maxWidth: 280,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#A7A7A7',
+    fontFamily: 'Inter',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  createVisionButton: {
+    backgroundColor: '#329BA4',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  createVisionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
   },
 });

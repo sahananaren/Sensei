@@ -124,9 +124,9 @@ export function useProductivityData() {
 
   // Calculate vision rankings based on active days
   const calculateVisionRankings = useCallback(() => {
-    const visionStats = new Map<string, { name: string; color: string; activeDays: number }>();
+    const visionStats = new Map<string, { name: string; color: string; activeDates: Set<string> }>();
 
-    // Count active days for each vision
+    // Count unique active days for each vision
     sessions.forEach(session => {
       if (session.vision && session.vision.status !== 'deleted') {
         const visionId = session.vision.id;
@@ -136,25 +136,23 @@ export function useProductivityData() {
           visionStats.set(visionId, {
             name: session.vision.name,
             color: session.vision.color,
-            activeDays: 0
+            activeDates: new Set<string>()
           });
         }
         
         const stats = visionStats.get(visionId)!;
-        if (!stats.activeDays || !stats.activeDays.toString().includes(date)) {
-          stats.activeDays++;
-        }
+        stats.activeDates.add(date);
       }
     });
 
     // Convert to array and sort by active days
     const rankings: VisionRanking[] = Array.from(visionStats.entries())
-      .map(([id, stats], index) => ({
+      .map(([id, stats]) => ({
         id,
         name: stats.name,
         color: stats.color,
-        activeDays: stats.activeDays,
-        rank: index + 1
+        activeDays: stats.activeDates.size,
+        rank: 0 // Will be set after sorting
       }))
       .sort((a, b) => b.activeDays - a.activeDays)
       .map((vision, index) => ({ ...vision, rank: index + 1 }));

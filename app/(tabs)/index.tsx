@@ -31,10 +31,10 @@ interface HabitCardProps {
   onGraduateHabit: (habit: Habit) => void;
   onDeleteHabit: (habit: Habit) => void;
   vision: VisionWithHabits;
+  sessions: any[];
 }
 
-function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit, vision }: HabitCardProps) {
-  const { sessions } = useFocusSessions();
+function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit, vision, sessions }: HabitCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   
@@ -170,9 +170,10 @@ interface VisionSectionProps {
   onDeleteVision: (vision: VisionWithHabits) => void;
   onGraduateHabit: (habit: Habit) => void;
   onDeleteHabit: (habit: Habit) => void;
+  sessions: any[];
 }
 
-function VisionSection({ vision, onHabitPress, onGraduateVision, onDeleteVision, onGraduateHabit, onDeleteHabit }: VisionSectionProps) {
+function VisionSection({ vision, onHabitPress, onGraduateVision, onDeleteVision, onGraduateHabit, onDeleteHabit, sessions }: VisionSectionProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
@@ -205,6 +206,7 @@ function VisionSection({ vision, onHabitPress, onGraduateVision, onDeleteVision,
           onGraduateHabit={onGraduateHabit}
           onDeleteHabit={onDeleteHabit}
           vision={vision}
+          sessions={sessions}
         />
       ))}
 
@@ -341,6 +343,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 export default function TodayTab() {
   const { user } = useAuth();
   const { visions, loading, error, refetch } = useVisions();
+  const { sessions, refetch: refetchSessions } = useFocusSessions();
   const { showUpgrade, incrementVisionCount, checkUpgradeRequired } = useSubscription();
   
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -355,15 +358,14 @@ export default function TodayTab() {
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Refetch visions when screen comes into focus
+  // Refetch data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Only refetch if we don't have any visions data
-      if (visions.length === 0) {
-        console.log('📱 TodayTab: Screen focused, refetching visions...');
-        refetch();
-      }
-    }, [refetch, visions.length])
+      console.log('📱 TodayTab: Screen focused, refetching data...');
+      // Always refetch both sessions and visions to ensure fresh data
+      refetchSessions();
+      refetch();
+    }, [refetch, refetchSessions])
   );
 
   // COMMENTED OUT: Check for first-time user upgrade popup
@@ -450,7 +452,8 @@ export default function TodayTab() {
 
       setShowGraduateVisionModal(false);
       setSelectedVision(null);
-      refetch(); // Refresh the visions list
+      // Refresh both visions and sessions to ensure data consistency
+      await Promise.all([refetch(), refetchSessions()]);
     } catch (error) {
       console.error('Error graduating vision:', error);
       Alert.alert('Error', 'Failed to graduate vision. Please try again.');
@@ -473,7 +476,8 @@ export default function TodayTab() {
 
       setShowGraduateHabitModal(false);
       setSelectedHabit(null);
-      refetch(); // Refresh the visions list
+      // Refresh both visions and sessions to ensure data consistency
+      await Promise.all([refetch(), refetchSessions()]);
     } catch (error) {
       console.error('Error graduating habit:', error);
       Alert.alert('Error', 'Failed to graduate habit. Please try again.');
@@ -485,7 +489,15 @@ export default function TodayTab() {
 
     setIsDeleting(true);
     try {
-      // Delete all habits associated with this vision first
+      // Delete all focus sessions associated with this vision first
+      const { error: sessionsError } = await supabase
+        .from('focus_sessions')
+        .delete()
+        .eq('vision_id', visionToDelete.id);
+
+      if (sessionsError) throw sessionsError;
+
+      // Delete all habits associated with this vision
       const { error: habitsError } = await supabase
         .from('habits')
         .delete()
@@ -503,7 +515,8 @@ export default function TodayTab() {
 
       setShowDeleteVisionModal(false);
       setVisionToDelete(null);
-      refetch();
+      // Refresh both visions and sessions to ensure data consistency
+      await Promise.all([refetch(), refetchSessions()]);
     } catch (error) {
       console.error('Error deleting vision:', error);
       Alert.alert('Error', 'Failed to delete vision. Please try again.');
@@ -517,6 +530,15 @@ export default function TodayTab() {
 
     setIsDeleting(true);
     try {
+      // Delete all focus sessions associated with this habit first
+      const { error: sessionsError } = await supabase
+        .from('focus_sessions')
+        .delete()
+        .eq('habit_id', habitToDelete.id);
+
+      if (sessionsError) throw sessionsError;
+
+      // Delete the habit
       const { error } = await supabase
         .from('habits')
         .delete()
@@ -526,7 +548,8 @@ export default function TodayTab() {
 
       setShowDeleteHabitModal(false);
       setHabitToDelete(null);
-      refetch();
+      // Refresh both visions and sessions to ensure data consistency
+      await Promise.all([refetch(), refetchSessions()]);
     } catch (error) {
       console.error('Error deleting habit:', error);
       Alert.alert('Error', 'Failed to delete habit. Please try again.');
@@ -538,14 +561,6 @@ export default function TodayTab() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Time to Focus</Text>
-              <Text style={styles.subtitle}>Pick a habit to focus on</Text>
-            </View>
-          </View>
-        </View>
         <LoadingState />
       </View>
     );
@@ -554,14 +569,6 @@ export default function TodayTab() {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Time to Focus</Text>
-              <Text style={styles.subtitle}>Pick a habit to focus on</Text>
-            </View>
-          </View>
-        </View>
         <ErrorState error={error} onRetry={refetch} />
       </View>
     );
@@ -569,53 +576,66 @@ export default function TodayTab() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Time to Focus</Text>
-            <Text style={styles.subtitle}>Pick a habit to focus on</Text>
+      {/* Header - only show when there are visions */}
+      {visions.length > 0 && (
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Time to Focus</Text>
+              <Text style={styles.subtitle}>Pick a habit to focus on</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => setShowAddMenu(true)}
+              activeOpacity={0.7}
+            >
+              <Plus size={20} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => setShowAddMenu(true)}
-            activeOpacity={0.7}
-          >
-            <Plus size={20} color="#FFFFFF" strokeWidth={2.5} />
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
 
       {/* Body */}
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#329BA4"
-          />
-        }
-      >
-        {visions.length > 0 ? (
-          visions.map((vision) => (
-            <VisionSection
-              key={vision.id}
-              vision={vision}
-              onHabitPress={handleHabitPress}
-              onGraduateVision={handleGraduateVision}
-              onDeleteVision={handleDeleteVision}
-              onGraduateHabit={handleGraduateHabit}
-              onDeleteHabit={handleDeleteHabit}
+      {visions.length > 0 ? (
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#329BA4"
             />
-          ))
-        ) : (
+          }
+        >
+          {visions.map((vision) => {
+            // Filter sessions to only include those for habits that exist in this vision
+            const validHabitIds = new Set(vision.habits.map(habit => habit.id));
+            const filteredSessions = sessions.filter(session => 
+              validHabitIds.has(session.habit_id)
+            );
+            
+            return (
+              <VisionSection
+                key={vision.id}
+                vision={vision}
+                onHabitPress={handleHabitPress}
+                onGraduateVision={handleGraduateVision}
+                onDeleteVision={handleDeleteVision}
+                onGraduateHabit={handleGraduateHabit}
+                onDeleteHabit={handleDeleteHabit}
+                sessions={filteredSessions}
+              />
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyStateContainer}>
           <EmptyState onCreateVision={handleCreateVision} />
-        )}
-      </ScrollView>
+        </View>
+      )}
 
       {/* Add Menu Modal */}
       <AddMenu
@@ -806,11 +826,15 @@ const styles = StyleSheet.create({
   deleteVisionButton: {
     padding: 4,
   },
-  emptyState: {
+  emptyStateContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
   emptyStateContent: {
     alignItems: 'center',

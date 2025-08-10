@@ -110,10 +110,12 @@ function ProductivityChartTooltip({ visible, position, content, onClose }: Produ
 }
 
 export function ProductivityChart({ weekData, sessions, height = 400 }: ProductivityChartProps) {
-  const chartWidth = 300;
+  const chartWidth = 360;
   const chartHeight = height - 79; // Leave space for labels only
-  const leftPadding = 30; // Left padding for Y-axis labels
-  const rightPadding = 8; // Right padding as requested
+  const leftPadding = 40; // Left padding for Y-axis labels
+  const rightPadding = 24; // Right padding as requested
+  const topPadding = 20; // Top padding (reduced from leftPadding)
+  const bottomPadding = leftPadding; // Bottom padding (keep same as left)
   
   // Tooltip state
   const [showTooltip, setShowTooltip] = useState(false);
@@ -152,14 +154,14 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
     const visionPoints = weekData.map((day, index) => {
       const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
       const visionMinutes = day.visionData[visionId]?.minutes || 0;
-      const y = chartHeight - leftPadding - ((visionMinutes / maxMinutes) * (chartHeight - leftPadding * 2));
+      const y = chartHeight - bottomPadding - ((visionMinutes / maxMinutes) * (chartHeight - topPadding - bottomPadding));
       return { x, y };
     });
     
     // Create area path for gradient fill
     const areaPathD = getCurvedPathD(visionPoints) + 
-      ` L ${visionPoints[visionPoints.length - 1].x} ${chartHeight - leftPadding}` +
-      ` L ${visionPoints[0].x} ${chartHeight - leftPadding} Z`;
+      ` L ${visionPoints[visionPoints.length - 1].x} ${chartHeight - bottomPadding}` +
+      ` L ${visionPoints[0].x} ${chartHeight - bottomPadding} Z`;
     
     return {
       id: visionId,
@@ -180,7 +182,7 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
   for (let hours = 0; hours <= maxHours; hours += interval) {
     const minutes = hours * 60;
     if (minutes <= maxMinutes) {
-      const y = chartHeight - leftPadding - ((minutes / maxMinutes) * (chartHeight - leftPadding * 2));
+      const y = chartHeight - bottomPadding - ((minutes / maxMinutes) * (chartHeight - topPadding - bottomPadding));
       const label = hours === 0 ? '0' : `${hours}h`;
       yLabels.push({ y, label, minutes });
     }
@@ -189,7 +191,7 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
   // Calculate cumulative productivity line
   const cumulativePoints = weekData.map((day, index) => {
     const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
-    const y = chartHeight - leftPadding - ((day.totalMinutes / maxMinutes) * (chartHeight - leftPadding * 2));
+    const y = chartHeight - bottomPadding - ((day.totalMinutes / maxMinutes) * (chartHeight - topPadding - bottomPadding));
     return { x, y };
   });
   
@@ -233,7 +235,7 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
   return (
     <>
       <View style={styles.container}>
-        <Svg width={chartWidth} height={height - 16} style={styles.chart}>
+        <Svg width={chartWidth} height={height - 46} style={styles.chart}>
           <Defs>
             {visionLines.map((visionLine, index) => (
               <LinearGradient key={visionLine.id} id={`visionGradient${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -261,9 +263,9 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
           {yLabels.map((label, index) => (
             <SvgText
               key={index}
-              x={leftPadding - 12}
+              x={leftPadding - 20}
               y={label.y + 4}
-              fontSize="10"
+              fontSize="12"
               fill="#A7A7A7"
               textAnchor="end"
               fontFamily="Inter-Regular"
@@ -331,12 +333,12 @@ export function ProductivityChart({ weekData, sessions, height = 400 }: Producti
           
           {/* X-axis labels */}
           {weekData.map((day, index) => {
-            const x = leftPadding + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 1);
+            const x = (leftPadding - 12 + 20) + (index * (chartWidth - leftPadding - rightPadding)) / (weekData.length - 0.8);
             return (
             <SvgText
               key={day.date}
               x={x}
-              y={chartHeight + 25}
+              y={chartHeight }
               fontSize="12"
               fill="#A7A7A7"
               textAnchor="middle"
@@ -414,6 +416,11 @@ const styles = StyleSheet.create({
   },
   legend: {
     marginTop: 0,
+    paddingTop: 16,
+    paddingLeft: 12,
+    paddingBottom: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: '#1C1C1C',
   },
   legendItems: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -11,7 +12,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { ChevronDown, ChevronUp, Plus, Pencil, Trash2, Check, X } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Plus, Pencil, Trash2, Check, X, Target } from 'lucide-react-native';
+import { router } from 'expo-router';
 import { useVisionsForMastery, VisionWithHabits } from '@/hooks/useVisions';
 import { useFocusSessions } from '@/hooks/useFocusSessions';
 import { useMilestones } from '@/hooks/useMilestones';
@@ -563,15 +565,44 @@ function DayLogViewer({ selectedDate, getSessionsForDate, visionName }: DayLogVi
   );
 }
 
+function EmptyState({ onCreateVision }: { onCreateVision: () => void }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyStateContent}>
+        <Target size={48} color="#A7A7A7" strokeWidth={1.5} />
+        <Text style={styles.emptyStateTitle}>No visions yet</Text>
+        <Text style={styles.emptyStateSubtitle}>
+          Create your first vision to start tracking habits and building momentum
+        </Text>
+        <TouchableOpacity 
+          style={styles.createVisionButton} 
+          onPress={onCreateVision}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.createVisionButtonText}>Create your First Vision</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function MasteryTab() {
   const { visions, loading, error, refetch } = useVisionsForMastery();
-  const { sessions } = useFocusSessions();
+  const { sessions, refetch: refetchSessions } = useFocusSessions();
   const [selectedVision, setSelectedVision] = useState<VisionWithHabits | null>(null);
   const [showDeleteVisionModal, setShowDeleteVisionModal] = useState(false);
   const [visionToDelete, setVisionToDelete] = useState<VisionWithHabits | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]); // Set today as default
+
+  // Refetch data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+      refetchSessions();
+    }, [refetch, refetchSessions])
+  );
 
   // Set the first vision as selected when visions load
   React.useEffect(() => {
@@ -738,6 +769,10 @@ export default function MasteryTab() {
   const masteryStats = calculateMasteryStats();
   const fullDays = Math.floor(masteryStats.hours / 24);
 
+  const handleCreateVision = () => {
+    router.push('/create-vision');
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -759,9 +794,10 @@ export default function MasteryTab() {
 
   if (visions.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No visions found</Text>
-        <Text style={styles.emptySubtext}>Create your first vision to start tracking mastery</Text>
+      <View style={styles.container}>
+        <View style={styles.emptyStateContainer}>
+          <EmptyState onCreateVision={handleCreateVision} />
+        </View>
       </View>
     );
   }
@@ -1219,13 +1255,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     marginTop: 16,
   },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 80,
-  },
   emptyStateText: {
     fontSize: 16,
     fontWeight: '400',
@@ -1261,27 +1290,48 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Inter',
   },
-  emptyContainer: {
+  emptyStateContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 80,
   },
-  emptyText: {
-    fontSize: 16,
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateContent: {
+    alignItems: 'center',
+    maxWidth: 280,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 15,
     fontWeight: '400',
     color: '#A7A7A7',
     fontFamily: 'Inter',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
+    marginBottom: 32,
   },
-  emptySubtext: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#A7A7A7',
+  createVisionButton: {
+    backgroundColor: '#329BA4',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  createVisionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
     fontFamily: 'Inter',
-    marginTop: 8,
   },
   content: {
     flex: 1,

@@ -98,20 +98,35 @@ export function useAuth() {
           return;
         }
 
-        // Only refresh if we have a valid session
+        // Check if session is close to expiring (within 5 minutes)
+        const expiresAt = currentSession.expires_at;
+        const now = Math.floor(Date.now() / 1000);
+        const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
+        
+        if (timeUntilExpiry > 300) { // More than 5 minutes left
+          console.log('🔐 useAuth: Session still valid, no refresh needed');
+          return;
+        }
+
+        // Try to refresh the session to keep user logged in
         const { data, error } = await supabase.auth.refreshSession();
         if (error) {
           console.error('🔐 useAuth: Session refresh failed:', error);
+          // Don't clear the session - keep user logged in even if refresh fails
+          // The app will continue to work with the current session/user data
+          console.log('🔐 useAuth: Keeping user logged in despite refresh failure');
         } else {
           console.log('🔐 useAuth: Session refreshed successfully');
         }
       } catch (error) {
         console.error('🔐 useAuth: Session refresh error:', error);
+        // Don't clear session - keep user logged in
+        console.log('🔐 useAuth: Keeping user logged in despite refresh error');
       }
     };
 
-    // Refresh session when app becomes active
-    const interval = setInterval(refreshSession, 30000); // Every 30 seconds
+    // Check session every 5 minutes to attempt refresh if needed
+    const interval = setInterval(refreshSession, 300000); // Every 5 minutes
     return () => clearInterval(interval);
   }, []);
 

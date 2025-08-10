@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -29,7 +29,7 @@ export function useFocusSessions(visionId?: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     if (!user) {
       setSessions([]);
       setLoading(false);
@@ -64,15 +64,15 @@ export function useFocusSessions(visionId?: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, visionId]);
 
   useEffect(() => {
     fetchSessions();
-  }, [user, visionId]);
+  }, [fetchSessions]);
 
-  const refetch = () => {
+  const refetch = useCallback(() => {
     fetchSessions();
-  };
+  }, [fetchSessions]);
 
   return {
     sessions,
