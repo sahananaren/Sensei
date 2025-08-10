@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -433,12 +432,22 @@ export default function ProductivityTab() {
   const [selectedWallOfFameVisionId, setSelectedWallOfFameVisionId] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   
-  // Refetch data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch])
-  );
+  // Data is already fetched by hooks on mount - no need to refetch on focus
+  
+  // Memoize expensive calculations to avoid running on every render (must be before any conditional returns)
+  const stats = useMemo(() => calculateStats(), [calculateStats]);
+  const weekData = useMemo(() => getWeeklyData(weekOffset), [getWeeklyData, weekOffset]);
+  
+  // Memoize unique visions for Wall of Fame filter
+  const uniqueVisions = useMemo(() => {
+    return Array.from(
+      new Map(sessions.map(session => [session.vision.id, session.vision])).values()
+    ).map(vision => ({
+      id: vision.id,
+      name: vision.name,
+      color: vision.color,
+    }));
+  }, [sessions]);
   
   const handleCalendarDateSelect = (date: Date) => {
     // Calculate week offset for the selected date
@@ -483,17 +492,6 @@ export default function ProductivityTab() {
     );
   }
 
-  const stats = calculateStats();
-  const weekData = getWeeklyData(weekOffset);
-  
-  // Get unique visions for Wall of Fame filter
-  const uniqueVisions = Array.from(
-    new Map(sessions.map(session => [session.vision.id, session.vision])).values()
-  ).map(vision => ({
-    id: vision.id,
-    name: vision.name,
-    color: vision.color,
-  }));
   
   // Format header subtitle based on days since joining
   const getHeaderSubtitle = () => {

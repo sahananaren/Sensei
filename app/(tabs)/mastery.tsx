@@ -1,5 +1,4 @@
-import React, { useState, useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -596,13 +595,7 @@ export default function MasteryTab() {
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]); // Set today as default
 
-  // Refetch data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-      refetchSessions();
-    }, [refetch, refetchSessions])
-  );
+  // Data is already fetched by hooks on mount - no need to refetch on focus
 
   // Set the first vision as selected when visions load
   React.useEffect(() => {
@@ -710,8 +703,8 @@ export default function MasteryTab() {
     }
   };
 
-  // Add a function to filter sessions by vision:
-  const getVisionSessions = () => {
+  // Memoize vision sessions to avoid recalculating on every render
+  const visionSessions = useMemo(() => {
     if (!selectedVision) return [];
     
     // Get all habit IDs for the selected vision
@@ -719,15 +712,14 @@ export default function MasteryTab() {
     
     // Filter sessions to only include those from this vision's habits
     return sessions.filter(session => visionHabitIds.includes(session.habit_id));
-  };
+  }, [selectedVision, sessions]);
 
-  // Update the component calls to use filtered sessions:
-  const getSessionsForSelectedDate = (date: string) => {
+  // Memoize sessions for selected date
+  const getSessionsForSelectedDate = useCallback((date: string) => {
     if (!date || !selectedVision) return [];
     
     try {
       const targetDate = new Date(date); // Use local time
-      const visionSessions = getVisionSessions();
       
       return visionSessions.filter(session => 
         new Date(session.completed_at).toISOString().split('T')[0] === targetDate.toISOString().split('T')[0]
@@ -736,11 +728,10 @@ export default function MasteryTab() {
       console.error('Error parsing date:', error);
       return [];
     }
-  };
+  }, [selectedVision, visionSessions]);
 
-  // Calculate mastery stats and full days
-  const calculateMasteryStats = () => {
-    const visionSessions = getVisionSessions();
+  // Memoize mastery stats calculation
+  const masteryStats = useMemo(() => {
     if (!visionSessions.length || !selectedVision) return { hours: 0, timeUnit: 'days', timeValue: 1, showFullDays: false };
 
     const totalMinutes = visionSessions.reduce((sum, session) => sum + session.duration_minutes, 0);
@@ -765,9 +756,9 @@ export default function MasteryTab() {
       const months = Math.round(daysSinceStart / 30 * 2) / 2; // Round to nearest 0.5
       return { hours, timeUnit: 'months', timeValue: months, showFullDays };
     }
-  };
-  const masteryStats = calculateMasteryStats();
-  const fullDays = Math.floor(masteryStats.hours / 24);
+  }, [visionSessions, selectedVision]);
+  
+  const fullDays = useMemo(() => Math.floor(masteryStats.hours / 24), [masteryStats.hours]);
 
   const handleCreateVision = () => {
     router.push('/create-vision');
@@ -864,7 +855,7 @@ export default function MasteryTab() {
             </View>
 
             <StatsCards 
-              sessions={getVisionSessions()} 
+              sessions={visionSessions} 
               visionCreatedAt={selectedVision.created_at}
               isGraduated={selectedVision.status === 'graduated'}
               graduatedAt={selectedVision.graduated_at}
@@ -877,7 +868,7 @@ export default function MasteryTab() {
             />
 
             <CalendarHeatmap 
-              sessions={getVisionSessions()}
+              sessions={visionSessions}
               habits={selectedVision.habits}
               selectedHabitId={selectedHabitId}
               onSelectHabit={setSelectedHabitId}
@@ -1244,6 +1235,7 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,

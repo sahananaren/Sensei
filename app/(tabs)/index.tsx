@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -15,7 +14,6 @@ import {
 import { Plus, Target, Clock, Flame, MoreVertical } from 'lucide-react-native';
 import { Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/hooks/useAuth';
 import { useVisions, VisionWithHabits, Habit } from '@/hooks/useVisions';
 import { useFocusSessions } from '@/hooks/useFocusSessions';
@@ -38,16 +36,18 @@ function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   
-  // Calculate today's time for this habit
-  const today = new Date().toDateString();
-  const todaySessions = sessions.filter(session => 
-    session.habit_id === habit.id && 
-    new Date(session.completed_at).toDateString() === today
-  );
-  const timeToday = todaySessions.reduce((sum, session) => sum + session.duration_minutes, 0);
+  // Memoize today's time calculation
+  const timeToday = useMemo(() => {
+    const today = new Date().toDateString();
+    const todaySessions = sessions.filter(session => 
+      session.habit_id === habit.id && 
+      new Date(session.completed_at).toDateString() === today
+    );
+    return todaySessions.reduce((sum, session) => sum + session.duration_minutes, 0);
+  }, [sessions, habit.id]);
   
-  // Calculate streak - consecutive days with sessions including today
-  const calculateStreak = () => {
+  // Memoize streak calculation
+  const streak = useMemo(() => {
     const habitSessions = sessions.filter(session => session.habit_id === habit.id);
     if (habitSessions.length === 0) return 0;
     
@@ -58,7 +58,7 @@ function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit
       )
     );
     
-    let streak = 0;
+    let streakCount = 0;
     const now = new Date();
     const today = now.toDateString();
     const yesterday = new Date(now);
@@ -76,17 +76,16 @@ function HabitCard({ habit, visionColor, onPress, onGraduateHabit, onDeleteHabit
     while (true) {
       const dateString = checkDate.toDateString();
       if (sessionDays.has(dateString)) {
-        streak++;
+        streakCount++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
         break;
       }
     }
     
-    return streak;
-  };
+    return streakCount;
+  }, [sessions, habit.id]);
   
-  const streak = calculateStreak();
   const hasActivityToday = timeToday > 0;
 
   const handleMenuPress = (event: any) => {
@@ -358,15 +357,7 @@ export default function TodayTab() {
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Refetch data when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      console.log('📱 TodayTab: Screen focused, refetching data...');
-      // Always refetch both sessions and visions to ensure fresh data
-      refetchSessions();
-      refetch();
-    }, [refetch, refetchSessions])
-  );
+  // Data is already fetched by hooks on mount - no need to refetch on focus
 
   // COMMENTED OUT: Check for first-time user upgrade popup
   // useEffect(() => {
@@ -558,6 +549,18 @@ export default function TodayTab() {
     }
   };
 
+  // Memoize vision sessions mapping to avoid expensive calculations on every render
+  const visionsWithFilteredSessions = useMemo(() => {
+    return visions.map((vision) => {
+      // Filter sessions to only include those for habits that exist in this vision
+      const validHabitIds = new Set(vision.habits.map(habit => habit.id));
+      const filteredSessions = sessions.filter(session => 
+        validHabitIds.has(session.habit_id)
+      );
+      return { vision, filteredSessions };
+    });
+  }, [visions, sessions]);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -610,26 +613,18 @@ export default function TodayTab() {
             />
           }
         >
-          {visions.map((vision) => {
-            // Filter sessions to only include those for habits that exist in this vision
-            const validHabitIds = new Set(vision.habits.map(habit => habit.id));
-            const filteredSessions = sessions.filter(session => 
-              validHabitIds.has(session.habit_id)
-            );
-            
-            return (
-              <VisionSection
-                key={vision.id}
-                vision={vision}
-                onHabitPress={handleHabitPress}
-                onGraduateVision={handleGraduateVision}
-                onDeleteVision={handleDeleteVision}
-                onGraduateHabit={handleGraduateHabit}
-                onDeleteHabit={handleDeleteHabit}
-                sessions={filteredSessions}
-              />
-            );
-          })}
+          {visionsWithFilteredSessions.map(({ vision, filteredSessions }) => (
+            <VisionSection
+              key={vision.id}
+              vision={vision}
+              onHabitPress={handleHabitPress}
+              onGraduateVision={handleGraduateVision}
+              onDeleteVision={handleDeleteVision}
+              onGraduateHabit={handleGraduateHabit}
+              onDeleteHabit={handleDeleteHabit}
+              sessions={filteredSessions}
+            />
+          ))}
         </ScrollView>
       ) : (
         <View style={styles.emptyStateContainer}>
