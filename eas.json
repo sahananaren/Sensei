@@ -14,9 +14,7 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "env": {
-        "EXPO_ANDROID_VERSION_CODE": "15"
-      },
+
       "prebuildCommand": "npx expo prebuild --platform android --clean --no-install"
     }
   },

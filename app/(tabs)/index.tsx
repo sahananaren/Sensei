@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   View, 
   Text, 
@@ -357,7 +358,13 @@ export default function TodayTab() {
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Data is already fetched by hooks on mount - no need to refetch on focus
+  // Refetch sessions when screen comes into focus (for when returning from focus session)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refetch sessions to update streaks and today's activity after completing a session
+      refetchSessions();
+    }, [refetchSessions])
+  );
 
   // COMMENTED OUT: Check for first-time user upgrade popup
   // useEffect(() => {

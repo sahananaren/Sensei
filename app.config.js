@@ -7,7 +7,7 @@
       icon: "./assets/images/icon.png",
       scheme: "com.sahananarenx.Sensei",
       userInterfaceStyle: "automatic",
-      newArchEnabled: false,
+      newArchEnabled: true,
       
       // Add splash screen configuration
       splash: {
@@ -19,6 +19,7 @@
       ios: {
         supportsTablet: true,
         // Add notification permissions for iOS
+        bundleIdentifier: "com.sahananarenx.Sensei",
         infoPlist: {
           UIBackgroundModes: ["remote-notification"]
         }
@@ -55,7 +56,7 @@
       owner: "sahananarenx",
       android: {
         package: "com.sahananarenx.Sensei",
-        versionCode: 17, // This will be used by prebuild
+        versionCode: 26, // This will be used by prebuild
         permissions: [
           "NOTIFICATIONS",
           "VIBRATE",
